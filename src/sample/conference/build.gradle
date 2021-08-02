@@ -30,4 +30,5 @@ dependencies {
     }
     implementation project(':src:sample:utils')
     implementation project(':src:sdk:conference')
+    implementation 'com.alibaba:fastjson:1.2.62'
 }
