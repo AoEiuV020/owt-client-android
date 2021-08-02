@@ -45,7 +45,6 @@ jobs:
     - name: Build with Gradle
       run: |
         ./gradlew assembleRelease
-        find ./app/build/outputs/
         mv ./src/sample/conference/build/outputs/apk/release/*.apk conference-$BUILD_NAME_WITH_VERSION.apk
         mv ./src/sample/p2p/build/outputs/apk/release/*.apk p2p-$BUILD_NAME_WITH_VERSION.apk
     - name: Upload APK conference
