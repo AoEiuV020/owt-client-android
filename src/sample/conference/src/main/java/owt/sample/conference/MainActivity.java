@@ -13,6 +13,7 @@ import android.media.AudioManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
@@ -154,6 +155,54 @@ public class MainActivity extends AppCompatActivity
             settingsCurrent = !settingsCurrent;
         }
     };
+
+    private View.OnClickListener subscribe = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            subscribeRemoteStreamChoice = 0;
+            subscribeVideoCodecChoice = 0;
+            subscribeSimulcastRidChoice = 0;
+            final String[] items = (String[]) remoteStreamIdList.toArray(new String[0]);
+            AlertDialog.Builder singleChoiceDialog =
+                    new AlertDialog.Builder(MainActivity.this);
+            singleChoiceDialog.setTitle("Remote Stream List");
+            singleChoiceDialog.setSingleChoiceItems(getRemoteStreamNameList(items), 0,
+                    (dialog, which) -> subscribeRemoteStreamChoice = which);
+            singleChoiceDialog.setPositiveButton("ok",
+                    (dialog, which) -> chooseCodec(
+                            remoteStreamMap.get(items[subscribeRemoteStreamChoice])));
+            singleChoiceDialog.show();
+        }
+    };
+
+    private String[] getRemoteStreamNameList(String[] items) {
+        String[] ret = new String[items.length];
+        for (int i = 0; i < items.length; i++) {
+            String id = items[i];
+            if (id.endsWith("-common")) {
+                ret[i] = "all in one";
+            } else {
+                UserInfo userInfo = getUserInfoById(id);
+                if (userInfo == null) {
+                    ret[i] = id;
+                } else {
+                    ret[i] = userInfo.getUsername();
+                }
+            }
+        }
+        return ret;
+    }
+
+    @Nullable
+    private UserInfo getUserInfoById(String streamId) {
+        for (UserInfo userInfo : userInfoMap.values()) {
+            if (TextUtils.equals(userInfo.getStreamId(), streamId)) {
+                return userInfo;
+            }
+        }
+        return null;
+    }
+
     private View.OnClickListener leaveRoom = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
