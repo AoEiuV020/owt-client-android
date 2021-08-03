@@ -41,9 +41,9 @@ jobs:
               echo "${{ secrets.SIGNING_PROPERTIES }}" > signing.properties
               if test -n "${{ secrets.SIGNING_KEY }}"
               then
-                  echo ANDROID_SIGN="true" > .custom_env
+                  echo ANDROID_SIGN="true" >> .custom_env
               fi
-              cat signing.properties > .custom_env
+              cat signing.properties >> .custom_env
           fi
           cat .custom_env
           cat .custom_env >> $GITHUB_ENV
