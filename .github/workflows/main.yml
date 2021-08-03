@@ -27,8 +27,15 @@ jobs:
           BUILD_NAME="${GITHUB_REPOSITORY#*/}"
           if [[ ${GITHUB_REF} == refs/tags* ]]
           then
+              echo CREATE_RELEASE="true" >> .custom_env
               BUILD_VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ ${GITHUB_REF} == refs/pull* ]]
+          then
+              num=${GITHUB_REF#refs/pull/}
+              num=${num%/merge}
+              BUILD_VERSION=pr-${num}-"$(date +'%Y%m%d%H%M%S')"
           else
+              echo CREATE_RELEASE="true" >> .custom_env
               echo PRE_RELEASE="true" >> .custom_env
               BUILD_VERSION="$(date +'%Y%m%d%H%M%S')"
           fi
@@ -91,6 +98,7 @@ jobs:
         name: p2p-build
         path: p2p-${{ env.BUILD_NAME_WITH_VERSION }}.apk
     - name: create release
+      if: ${{ env.CREATE_RELEASE == 'true' }}
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -102,6 +110,7 @@ jobs:
         draft: true
         prerelease: ${{ env.PRE_RELEASE == 'true' }}
     - name: Upload Release Asset conference
+      if: ${{ env.CREATE_RELEASE == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,6 +120,7 @@ jobs:
         asset_name: conference-${{ env.BUILD_NAME_WITH_VERSION }}.apk
         asset_content_type: application/zip
     - name: Upload Release Asset p2p
+      if: ${{ env.CREATE_RELEASE == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,6 +130,7 @@ jobs:
         asset_name: p2p-${{ env.BUILD_NAME_WITH_VERSION }}.apk
         asset_content_type: application/zip
     - name: public release
+      if: ${{ env.CREATE_RELEASE == 'true' }}
       uses: eregon/publish-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
