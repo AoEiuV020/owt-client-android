@@ -1,5 +1,9 @@
 package owt.sample.conference;
 
+import android.text.TextUtils;
+
+import java.util.Arrays;
+
 @SuppressWarnings("unused")
 public class UserInfo {
     private String participantId;
@@ -15,6 +19,19 @@ public class UserInfo {
                 ", username='" + username + '\'' +
                 ", avatarUrl='" + avatarUrl + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        UserInfo userInfo = (UserInfo) o;
+        return TextUtils.equals(participantId, userInfo.participantId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(new Object[]{participantId});
     }
 
     public String getParticipantId() {

@@ -7,8 +7,8 @@ package owt.sample.conference;
 import android.content.Context;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -25,41 +25,14 @@ import java.util.Map;
 public class VideoFragment extends Fragment {
 
     private VideoFragmentListener listener;
-    private SurfaceViewRenderer fullRenderer, smallRenderer;
+    private SurfaceViewRenderer fullRenderer;
+    private RecyclerView rvRemote;
     private TextView statsInView, statsOutView;
-    private float dX, dY;
     private BigInteger lastBytesSent = BigInteger.valueOf(0);
     private BigInteger lastBytesReceived = BigInteger.valueOf(0);
-    private View.OnTouchListener touchListener = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View v, MotionEvent event) {
-            if (v.getId() == R.id.small_renderer) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        dX = v.getX() - event.getRawX();
-                        dY = v.getY() - event.getRawY();
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        v.animate()
-                                .x(event.getRawX() + dX)
-                                .y(event.getRawY() + dY)
-                                .setDuration(0)
-                                .start();
-                        break;
-                    case MotionEvent.ACTION_UP:
-                        v.animate()
-                                .x(event.getRawX() + dX >= event.getRawY() + dY ? event.getRawX()
-                                        + dX : 0)
-                                .y(event.getRawX() + dX >= event.getRawY() + dY ? 0
-                                        : event.getRawY() + dY)
-                                .setDuration(10)
-                                .start();
-                        break;
-                }
-            }
-            return true;
-        }
-    };
+    private Long lastFrameDecoded = Long.valueOf(0);
+    private Long lastFrameEncoded = Long.valueOf(0);
+    private RendererAdapter adapter;
 
     public VideoFragment() {
     }
@@ -79,20 +52,16 @@ public class VideoFragment extends Fragment {
         statsOutView.setVisibility(View.GONE);
 
         fullRenderer = mView.findViewById(R.id.full_renderer);
-        smallRenderer = mView.findViewById(R.id.small_renderer);
-
-        smallRenderer.init(((MainActivity) getActivity()).rootEglBase.getEglBaseContext(), null);
-        smallRenderer.setMirror(true);
-        smallRenderer.setOnTouchListener(touchListener);
-        smallRenderer.setEnableHardwareScaler(true);
-        smallRenderer.setZOrderMediaOverlay(true);
+        rvRemote = mView.findViewById(R.id.rvSmallRenderer);
+        adapter = new RendererAdapter(((MainActivity) getActivity()).rootEglBase);
+        rvRemote.setAdapter(adapter);
 
         fullRenderer.init(((MainActivity) getActivity()).rootEglBase.getEglBaseContext(), null);
         fullRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
         fullRenderer.setEnableHardwareScaler(true);
         fullRenderer.setZOrderMediaOverlay(true);
 
-        listener.onRenderer(smallRenderer, fullRenderer);
+        listener.onRenderer(adapter, fullRenderer);
         clearStats(true);
         clearStats(false);
         return mView;
@@ -178,6 +147,6 @@ public class VideoFragment extends Fragment {
     }
 
     public interface VideoFragmentListener {
-        void onRenderer(SurfaceViewRenderer localRenderer, SurfaceViewRenderer remoteRenderer);
+        void onRenderer(RendererAdapter adapter, SurfaceViewRenderer remoteRenderer);
     }
 }

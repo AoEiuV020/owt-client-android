@@ -1,8 +1,9 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-             xmlns:tools="http://schemas.android.com/tools"
-             android:layout_width="match_parent"
-             android:layout_height="match_parent"
-             tools:context="owt.sample.conference.VideoFragment">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="owt.sample.conference.VideoFragment">
 
     <FrameLayout
         android:id="@+id/video_container"
@@ -24,7 +25,7 @@
                 android:layout_weight="1"
                 android:background="@color/black_overlay"
                 android:gravity="top"
-                android:textColor="@color/colorPrimary"/>
+                android:textColor="@color/colorPrimary" />
 
             <TextView
                 android:id="@+id/stats_out"
@@ -34,20 +35,25 @@
                 android:layout_weight="1"
                 android:background="@color/black_overlay"
                 android:gravity="top"
-                android:textColor="@color/colorPrimary"/>
+                android:textColor="@color/colorPrimary" />
 
         </LinearLayout>
 
 
         <org.webrtc.SurfaceViewRenderer
-            android:id="@+id/small_renderer"
-            android:layout_width="160dp"
-            android:layout_height="120dp"/>
-
-        <org.webrtc.SurfaceViewRenderer
             android:id="@+id/full_renderer"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
+            android:layout_height="match_parent" />
+
+        <android.support.v7.widget.RecyclerView
+            android:id="@+id/rvSmallRenderer"
+            android:layout_width="160dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="bottom|end"
+            android:orientation="vertical"
+            app:layoutManager="android.support.v7.widget.LinearLayoutManager"
+            tools:itemCount="4"
+            tools:listitem="@layout/item_remote_video" />
 
 
     </FrameLayout>
