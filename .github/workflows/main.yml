@@ -100,7 +100,7 @@ jobs:
         release_name: ${{ env.BUILD_VERSION }}
         body: ${{ github.event.commits[0].message }}
         draft: true
-        prerelease: ${{ env.PRE_RELEASE != 'true' }}
+        prerelease: ${{ env.PRE_RELEASE == 'true' }}
     - name: Upload Release Asset conference
       uses: actions/upload-release-asset@v1
       env:
