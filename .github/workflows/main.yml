@@ -29,12 +29,22 @@ jobs:
           then
               BUILD_VERSION=${GITHUB_REF#refs/tags/}
           else
+              echo PRE_RELEASE="true" >> .custom_env
               BUILD_VERSION="$(date +'%Y%m%d%H%M%S')"
           fi
           BUILD_NAME_WITH_VERSION="$BUILD_NAME-$BUILD_VERSION"
           echo BUILD_NAME="$BUILD_NAME" >> .custom_env
           echo BUILD_VERSION="$BUILD_VERSION" >> .custom_env
           echo BUILD_NAME_WITH_VERSION="$BUILD_NAME_WITH_VERSION" >> .custom_env
+          if test -n "${{ secrets.SIGNING_PROPERTIES }}"
+          then
+              echo "${{ secrets.SIGNING_PROPERTIES }}" > signing.properties
+              if test -n "${{ secrets.SIGNING_KEY }}"
+              then
+                  echo ANDROID_SIGN="true" > .custom_env
+              fi
+              cat signing.properties > .custom_env
+          fi
           cat .custom_env
           cat .custom_env >> $GITHUB_ENV
     - uses: actions/checkout@v2
@@ -43,8 +53,31 @@ jobs:
       with:
         java-version: 1.8
     - name: Build with Gradle
+      run: ./gradlew assembleRelease
+    - uses: AoEiuV020/sign-android-release@v2
+      name: Sign conference APK
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      if: ${{ env.ANDROID_SIGN == 'true' }}
+      with:
+        releaseDirectory: src/sample/conference/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ env.keyAlias }}
+        keyStorePassword: ${{ env.storePassword }}
+        keyPassword: ${{ env.keyPassword }}
+    - uses: AoEiuV020/sign-android-release@v2
+      name: Sign p2p APK
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      if: ${{ env.ANDROID_SIGN == 'true' }}
+      with:
+        releaseDirectory: src/sample/p2p/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ env.keyAlias }}
+        keyStorePassword: ${{ env.storePassword }}
+        keyPassword: ${{ env.keyPassword }}
+    - name: pick release file
       run: |
-        ./gradlew assembleRelease
         mv ./src/sample/conference/build/outputs/apk/release/*.apk conference-$BUILD_NAME_WITH_VERSION.apk
         mv ./src/sample/p2p/build/outputs/apk/release/*.apk p2p-$BUILD_NAME_WITH_VERSION.apk
     - name: Upload APK conference
@@ -67,7 +100,7 @@ jobs:
         release_name: ${{ env.BUILD_VERSION }}
         body: ${{ github.event.commits[0].message }}
         draft: true
-        prerelease: true
+        prerelease: ${{ env.PRE_RELEASE != 'true' }}
     - name: Upload Release Asset conference
       uses: actions/upload-release-asset@v1
       env:
