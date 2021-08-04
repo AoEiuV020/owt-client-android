@@ -788,6 +788,7 @@ public class MainActivity extends AppCompatActivity
         remoteStreamIdList.add(remoteStream.id());
         remoteStreamMap.put(remoteStream.id(), remoteStream);
         getParameterByRemoteStream(remoteStream);
+        subscribeForward(remoteStream, "VP8", null);
         remoteStream.addObserver(new owt.base.RemoteStream.StreamObserver() {
             @Override
             public void onEnded() {
