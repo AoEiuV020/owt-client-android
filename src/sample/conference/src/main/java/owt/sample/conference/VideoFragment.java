@@ -61,7 +61,7 @@ public class VideoFragment extends Fragment {
         fullRenderer.setEnableHardwareScaler(true);
         fullRenderer.setZOrderMediaOverlay(true);
 
-        listener.onRenderer(adapter, fullRenderer);
+        listener.onRenderer(adapter);
         clearStats(true);
         clearStats(false);
         return mView;
@@ -147,6 +147,6 @@ public class VideoFragment extends Fragment {
     }
 
     public interface VideoFragmentListener {
-        void onRenderer(RendererAdapter adapter, SurfaceViewRenderer remoteRenderer);
+        void onRenderer(RendererAdapter adapter);
     }
 }

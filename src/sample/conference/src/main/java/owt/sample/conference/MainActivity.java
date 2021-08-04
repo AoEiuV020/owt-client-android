@@ -4,6 +4,15 @@
  */
 package owt.sample.conference;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static org.webrtc.PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
+import static owt.base.MediaCodecs.AudioCodec.OPUS;
+import static owt.base.MediaCodecs.AudioCodec.PCMU;
+import static owt.base.MediaCodecs.VideoCodec.H264;
+import static owt.base.MediaCodecs.VideoCodec.H265;
+import static owt.base.MediaCodecs.VideoCodec.VP8;
+import static owt.base.MediaCodecs.VideoCodec.VP9;
+
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -34,7 +43,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.EglBase;
 import org.webrtc.RTCStatsReport;
-import org.webrtc.SurfaceViewRenderer;
 
 import java.util.Timer;
 import java.util.TimerTask;
@@ -66,15 +74,6 @@ import owt.conference.Subscription;
 import owt.sample.utils.OwtScreenCapturer;
 import owt.sample.utils.OwtVideoCapturer;
 
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-import static org.webrtc.PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
-import static owt.base.MediaCodecs.AudioCodec.OPUS;
-import static owt.base.MediaCodecs.AudioCodec.PCMU;
-import static owt.base.MediaCodecs.VideoCodec.H264;
-import static owt.base.MediaCodecs.VideoCodec.H265;
-import static owt.base.MediaCodecs.VideoCodec.VP8;
-import static owt.base.MediaCodecs.VideoCodec.VP9;
-
 public class MainActivity extends AppCompatActivity
         implements VideoFragment.VideoFragmentListener,
         ActivityCompat.OnRequestPermissionsResultCallback,
@@ -98,15 +97,12 @@ public class MainActivity extends AppCompatActivity
     private ConferenceClient conferenceClient;
     private ConferenceInfo conferenceInfo;
     private Publication publication;
-    private Subscription subscription;
     private LocalStream localStream;
     private OwtVideoCapturer capturer;
     private LocalStream screenStream;
     private OwtScreenCapturer screenCapturer;
     private Publication screenPublication;
     private RendererAdapter rendererAdapter;
-    private SurfaceViewRenderer remoteRenderer;
-    private RemoteStream remoteForwardStream = null;
     private int subscribeRemoteStreamChoice = 0;
     private int subscribeVideoCodecChoice = 0;
     private int subscribeSimulcastRidChoice = 0;
@@ -182,7 +178,7 @@ public class MainActivity extends AppCompatActivity
             if (id.endsWith("-common")) {
                 ret[i] = "all in one";
             } else {
-                UserInfo userInfo = getUserInfoById(id);
+                UserInfo userInfo = getUserInfoByStreamId(id);
                 if (userInfo == null) {
                     ret[i] = id;
                 } else {
@@ -194,7 +190,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Nullable
-    private UserInfo getUserInfoById(String streamId) {
+    private UserInfo getUserInfoByStreamId(String streamId) {
         for (UserInfo userInfo : userInfoMap.values()) {
             if (TextUtils.equals(userInfo.getStreamId(), streamId)) {
                 return userInfo;
@@ -209,6 +205,20 @@ public class MainActivity extends AppCompatActivity
             executor.execute(() -> conferenceClient.leave());
         }
     };
+
+    private View.OnClickListener unSubscribe = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+                rendererAdapter.detachAllRemoteStream(selfInfo.getParticipantId());
+                runOnUiThread(() -> {
+                    unSubscribeBtn.setVisibility(View.GONE);
+                    subscribeBtn.setVisibility(View.VISIBLE);
+                });
+                subscribeRemoteStreamChoice = 0;
+                subscribeVideoCodecChoice = 0;
+        }
+    };
+
     private View.OnClickListener unpublish = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
@@ -218,7 +228,7 @@ public class MainActivity extends AppCompatActivity
 
             executor.execute(() -> {
                 publication.stop();
-                rendererAdapter.detachStream(selfInfo.getParticipantId(), localStream);
+                rendererAdapter.detachStream(selfInfo.getParticipantId());
 
                 capturer.stopCapture();
                 capturer.dispose();
@@ -644,8 +654,8 @@ public class MainActivity extends AppCompatActivity
                 }
             });
         }
-        if (subscription != null) {
-            subscription.getStats(new ActionCallback<RTCStatsReport>() {
+        if (rendererAdapter != null) {
+            rendererAdapter.getStatus(new ActionCallback<RTCStatsReport>() {
                 @Override
                 public void onSuccess(RTCStatsReport result) {
                     videoFragment.updateStats(result, false);
@@ -743,9 +753,10 @@ public class MainActivity extends AppCompatActivity
                 new ActionCallback<Subscription>() {
                     @Override
                     public void onSuccess(Subscription result) {
-                        MainActivity.this.subscription = result;
-                        MainActivity.this.remoteForwardStream = remoteStream;
-                        remoteStream.attach(remoteRenderer);
+                        UserInfo userInfo = getUserInfoByStreamId(remoteStream.id());
+                        if (userInfo != null) {
+                            rendererAdapter.attachRemoteStream(userInfo.getParticipantId(), result, remoteStream);
+                        }
                         runOnUiThread(() -> {
                             subscribeBtn.setVisibility(View.GONE);
                             unSubscribeBtn.setVisibility(View.VISIBLE);
@@ -762,9 +773,8 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onRenderer(RendererAdapter adapter, SurfaceViewRenderer remoteRenderer) {
+    public void onRenderer(RendererAdapter adapter) {
         this.rendererAdapter = adapter;
-        this.remoteRenderer = remoteRenderer;
     }
 
     @Override
@@ -777,7 +787,7 @@ public class MainActivity extends AppCompatActivity
             public void onEnded() {
                 remoteStreamIdList.remove(remoteStream.id());
                 remoteStreamMap.remove(remoteStream.id());
-                Log.d(TAG, "onEnded() called: remoteStream.id = " + remoteStream.id() + ", userInfo = " + getUserInfoById(remoteStream.id()));
+                Log.d(TAG, "onEnded() called: remoteStream.id = " + remoteStream.id() + ", userInfo = " + getUserInfoByStreamId(remoteStream.id()));
             }
 
             @Override
@@ -889,7 +899,6 @@ public class MainActivity extends AppCompatActivity
         }
 
         publication = null;
-        subscription = null;
 
         remoteStreamIdList.clear();
         remoteStreamMap.clear();

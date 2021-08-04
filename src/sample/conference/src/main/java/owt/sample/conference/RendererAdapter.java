@@ -1,5 +1,6 @@
 package owt.sample.conference;
 
+import android.annotation.SuppressLint;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.WorkerThread;
@@ -11,25 +12,32 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import org.webrtc.EglBase;
+import org.webrtc.RTCStatsReport;
 import org.webrtc.SurfaceViewRenderer;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import owt.base.ActionCallback;
 import owt.base.Stream;
+import owt.conference.RemoteStream;
+import owt.conference.Subscription;
 
 public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHolder> {
     private static final String TAG = "RendererAdapter";
     private List<UserInfo> data = new ArrayList<>();
     private Map<String, Stream> streamMap = new HashMap<>();
+    private Map<String, Subscription> subscriptionMap = new HashMap<>();
     private Map<String, SurfaceViewRenderer> rendererMap = new HashMap<>();
     private EglBase rootEglBase;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public RendererAdapter(EglBase rootEglBase) {
         this.rootEglBase = rootEglBase;
+        setHasStableIds(true);
     }
 
     @Override
@@ -43,6 +51,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         UserInfo userInfo = data.get(i);
         Stream stream = streamMap.get(userInfo.getParticipantId());
         SurfaceViewRenderer renderer = viewHolder.renderer;
+        rendererMap.put(userInfo.getParticipantId(), renderer);
         _attackStream(userInfo.getParticipantId(), stream, renderer);
     }
 
@@ -51,11 +60,12 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         return data.size();
     }
 
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
+
     private void _attackStream(String participantId, Stream stream, SurfaceViewRenderer renderer) {
-        if (stream == null) {
-            Log.w(TAG, "_attackStream: stream not found participantId = " + participantId);
-            return;
-        }
         if (renderer == null) {
             Log.w(TAG, "_attackStream: renderer not found participantId = " + participantId);
             return;
@@ -103,13 +113,37 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     }
 
     @WorkerThread
-    public void detachStream(String participantId, Stream stream) {
-        streamMap.remove(participantId);
+    public void attachRemoteStream(String participantId, Subscription subscription, RemoteStream remoteStream) {
+        subscriptionMap.put(participantId, subscription);
+        attachStream(participantId, remoteStream);
+    }
+
+    @WorkerThread
+    public void detachStream(String participantId) {
+        Stream stream = streamMap.remove(participantId);
         SurfaceViewRenderer renderer = rendererMap.get(participantId);
         _detachStream(participantId, stream, renderer);
         mainHandler.post(() -> {
             notifyItemIfExists(getIndexById(participantId));
         });
+    }
+
+    @WorkerThread
+    public void detachRemoteStream(String participantId) {
+        detachStream(participantId);
+        Subscription subscription = subscriptionMap.remove(participantId);
+        if (subscription != null) {
+            subscription.stop();
+        }
+    }
+
+    public void detachAllRemoteStream(String selfParticipantId) {
+        for (UserInfo userInfo : data) {
+            if (TextUtils.equals(userInfo.getParticipantId(), selfParticipantId)) {
+                continue;
+            }
+            detachRemoteStream(userInfo.getParticipantId());
+        }
     }
 
     private void notifyItemIfExists(int pos) {
@@ -166,12 +200,23 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     public void onStart() {
         notifyDataSetChanged();
     }
 
+    public void getStatus(ActionCallback<RTCStatsReport> rtcStatsReportActionCallback) {
+        Collection<Subscription> subscriptions = subscriptionMap.values();
+        if (!subscriptions.isEmpty()) {
+            for (Subscription subscription : subscriptions) {
+                subscription.getStats(rtcStatsReportActionCallback);
+                break;
+            }
+        }
+    }
+
     public class ViewHolder extends RecyclerView.ViewHolder {
-        private SurfaceViewRenderer renderer = itemView.findViewById(R.id.renderer);
+        private final SurfaceViewRenderer renderer = itemView.findViewById(R.id.renderer);
 
         public ViewHolder(View itemView) {
             super(itemView);
