@@ -53,13 +53,13 @@ public class VideoFragment extends Fragment {
 
         fullRenderer = mView.findViewById(R.id.full_renderer);
         rvRemote = mView.findViewById(R.id.rvSmallRenderer);
-        adapter = new RendererAdapter(((MainActivity) getActivity()).rootEglBase);
-        rvRemote.setAdapter(adapter);
-
         fullRenderer.init(((MainActivity) getActivity()).rootEglBase.getEglBaseContext(), null);
         fullRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
         fullRenderer.setEnableHardwareScaler(true);
         fullRenderer.setZOrderMediaOverlay(true);
+
+        adapter = new RendererAdapter(((MainActivity) getActivity()).rootEglBase, fullRenderer);
+        rvRemote.setAdapter(adapter);
 
         listener.onRenderer(adapter);
         clearStats(true);

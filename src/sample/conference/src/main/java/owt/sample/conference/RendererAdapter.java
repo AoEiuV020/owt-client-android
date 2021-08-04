@@ -3,6 +3,8 @@ package owt.sample.conference;
 import android.annotation.SuppressLint;
 import android.os.Handler;
 import android.os.Looper;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.annotation.WorkerThread;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
@@ -33,10 +35,15 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     private Map<String, Subscription> subscriptionMap = new HashMap<>();
     private Map<String, SurfaceViewRenderer> rendererMap = new HashMap<>();
     private EglBase rootEglBase;
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
+    @NonNull
+    private SurfaceViewRenderer fullRenderer;
+    @Nullable
+    private String fullUserParticipantId;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public RendererAdapter(EglBase rootEglBase) {
+    public RendererAdapter(EglBase rootEglBase,@NonNull SurfaceViewRenderer fullRenderer) {
         this.rootEglBase = rootEglBase;
+        this.fullRenderer = fullRenderer;
         setHasStableIds(true);
     }
 
@@ -53,6 +60,16 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         SurfaceViewRenderer renderer = viewHolder.renderer;
         rendererMap.put(userInfo.getParticipantId(), renderer);
         _attackStream(userInfo.getParticipantId(), stream, renderer);
+        viewHolder.itemView.setOnClickListener(view -> {
+            changeFullUser(userInfo);
+        });
+    }
+
+    private void changeFullUser(UserInfo userInfo) {
+        String id = userInfo.getParticipantId();
+        fullUserParticipantId = id;
+        Stream stream = streamMap.get(id);
+        _attackStream(id, stream, fullRenderer);
     }
 
     @Override
@@ -191,7 +208,10 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             return;
         }
         data.remove(index);
-        streamMap.remove(userInfo.getParticipantId());
+        Stream stream = streamMap.remove(userInfo.getParticipantId());
+        if (TextUtils.equals(fullUserParticipantId, userInfo.getParticipantId())) {
+            _detachStream(userInfo.getParticipantId(), stream, fullRenderer);
+        }
         subscriptionMap.remove(userInfo.getParticipantId());
         rendererMap.remove(userInfo.getParticipantId());
         notifyItemRemoved(index);
