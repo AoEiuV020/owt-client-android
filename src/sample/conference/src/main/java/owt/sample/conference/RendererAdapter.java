@@ -82,6 +82,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         } else {
             if (oldStream != null) {
                 oldStream.detach(renderer);
+                renderer.setTag(R.id.tag_stream, null);
             }
         }
     }
@@ -165,14 +166,16 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     }
 
     public void add(UserInfo userInfo) {
+        Log.d(TAG, "add() called with: userInfo = [" + userInfo + "]");
         data.add(userInfo);
         notifyItemInserted(data.size() - 1);
     }
 
     public void update(UserInfo userInfo) {
+        Log.d(TAG, "update() called with: userInfo = [" + userInfo + "]");
         int index = getIndexById(userInfo.getParticipantId());
         if (index == -1) {
-            Log.e(TAG, "update: not found" + userInfo);
+            Log.w(TAG, "update: not found " + userInfo);
             add(userInfo);
             return;
         }
@@ -181,13 +184,16 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     }
 
     public void remove(UserInfo userInfo) {
+        Log.d(TAG, "remove() called with: userInfo = [" + userInfo + "]");
         int index = getIndexById(userInfo.getParticipantId());
         if (index == -1) {
-            Log.e(TAG, "remove: not found" + userInfo);
+            Log.e(TAG, "remove: not found " + userInfo);
             return;
         }
         data.remove(index);
         streamMap.remove(userInfo.getParticipantId());
+        subscriptionMap.remove(userInfo.getParticipantId());
+        rendererMap.remove(userInfo.getParticipantId());
         notifyItemRemoved(index);
     }
 
