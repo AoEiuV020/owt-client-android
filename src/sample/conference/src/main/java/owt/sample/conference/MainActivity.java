@@ -794,6 +794,10 @@ public class MainActivity extends AppCompatActivity
                 remoteStreamIdList.remove(remoteStream.id());
                 remoteStreamMap.remove(remoteStream.id());
                 Log.d(TAG, "onEnded() called: remoteStream.id = " + remoteStream.id() + ", userInfo = " + getUserInfoByStreamId(remoteStream.id()));
+                UserInfo userInfo = getUserInfoByStreamId(remoteStream.id());
+                if (userInfo != null) {
+                    rendererAdapter.detachRemoteStream(userInfo.getParticipantId());
+                }
             }
 
             @Override

@@ -38,7 +38,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     @NonNull
     private SurfaceViewRenderer fullRenderer;
     @Nullable
-    private String fullUserParticipantId;
+    private String selectedParticipantId;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public RendererAdapter(EglBase rootEglBase,@NonNull SurfaceViewRenderer fullRenderer) {
@@ -66,10 +66,8 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     }
 
     private void changeFullUser(UserInfo userInfo) {
-        String id = userInfo.getParticipantId();
-        fullUserParticipantId = id;
-        Stream stream = streamMap.get(id);
-        _attackStream(id, stream, fullRenderer);
+        selectedParticipantId = userInfo.getParticipantId();
+        updateFullVideo();
     }
 
     @Override
@@ -91,14 +89,14 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         if (stream != null) {
             if (oldStream != stream) {
                 if (oldStream != null) {
-                    oldStream.detach(renderer);
+                    safetyDetach(oldStream, renderer);
                 }
                 stream.attach(renderer);
                 renderer.setTag(R.id.tag_stream, stream);
             }
         } else {
             if (oldStream != null) {
-                oldStream.detach(renderer);
+                safetyDetach(oldStream, renderer);
                 renderer.setTag(R.id.tag_stream, null);
             }
         }
@@ -115,8 +113,15 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
         Stream oldStream = (Stream) renderer.getTag(R.id.tag_stream);
         if (oldStream == stream) {
-            stream.detach(renderer);
+            safetyDetach(stream, renderer);
             renderer.setTag(R.id.tag_stream, null);
+        }
+    }
+
+    private void safetyDetach(Stream stream, SurfaceViewRenderer renderer) {
+        try {
+            stream.detach(renderer);
+        } catch (Exception ignored) {
         }
     }
 
@@ -126,6 +131,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         SurfaceViewRenderer renderer = rendererMap.get(participantId);
         _attackStream(participantId, stream, renderer);
         mainHandler.post(() -> {
+            updateFullVideo();
             notifyItemIfExists(getIndexById(participantId));
         });
     }
@@ -141,7 +147,12 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         Stream stream = streamMap.remove(participantId);
         SurfaceViewRenderer renderer = rendererMap.get(participantId);
         _detachStream(participantId, stream, renderer);
+        if (TextUtils.equals(participantId, selectedParticipantId)) {
+            _detachStream(participantId, stream, fullRenderer);
+            selectedParticipantId = null;
+        }
         mainHandler.post(() -> {
+            updateFullVideo();
             notifyItemIfExists(getIndexById(participantId));
         });
     }
@@ -185,6 +196,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     public void add(UserInfo userInfo) {
         Log.d(TAG, "add() called with: userInfo = [" + userInfo + "]");
         data.add(userInfo);
+        updateFullVideo();
         notifyItemInserted(data.size() - 1);
     }
 
@@ -197,6 +209,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             return;
         }
         data.set(index, userInfo);
+        updateFullVideo();
         notifyItemIfExists(index);
     }
 
@@ -209,12 +222,36 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
         data.remove(index);
         Stream stream = streamMap.remove(userInfo.getParticipantId());
-        if (TextUtils.equals(fullUserParticipantId, userInfo.getParticipantId())) {
-            _detachStream(userInfo.getParticipantId(), stream, fullRenderer);
-        }
         subscriptionMap.remove(userInfo.getParticipantId());
-        rendererMap.remove(userInfo.getParticipantId());
+        SurfaceViewRenderer renderer = rendererMap.remove(userInfo.getParticipantId());
+        if (TextUtils.equals(selectedParticipantId, userInfo.getParticipantId())) {
+            _detachStream(userInfo.getParticipantId(), stream, fullRenderer);
+            selectedParticipantId = null;
+            updateFullVideo();
+        }
+        _detachStream(userInfo.getParticipantId(), stream, renderer);
         notifyItemRemoved(index);
+    }
+
+    private void updateFullVideo() {
+        if (!TextUtils.isEmpty(selectedParticipantId)) {
+            String id = selectedParticipantId;
+            Stream stream = streamMap.get(id);
+            fullRenderer.setVisibility(View.VISIBLE);
+            _attackStream(id, stream, fullRenderer);
+            return;
+        }
+        for (int i = data.size() - 1; i >= 0; i--) {
+            UserInfo userInfo = data.get(i);
+            String id = userInfo.getParticipantId();
+            Stream stream = streamMap.get(id);
+            if (stream != null) {
+                fullRenderer.setVisibility(View.VISIBLE);
+                _attackStream(id, stream, fullRenderer);
+                return;
+            }
+        }
+        fullRenderer.setVisibility(View.GONE);
     }
 
     public void onStop() {
