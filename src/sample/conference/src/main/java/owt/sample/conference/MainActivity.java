@@ -104,9 +104,6 @@ public class MainActivity extends AppCompatActivity
     private OwtScreenCapturer screenCapturer;
     private Publication screenPublication;
     private RendererAdapter rendererAdapter;
-    private int subscribeRemoteStreamChoice = 0;
-    private int subscribeVideoCodecChoice = 0;
-    private int subscribeSimulcastRidChoice = 0;
     private ArrayList<String> remoteStreamIdList = new ArrayList<>();
     private HashMap<String, RemoteStream> remoteStreamMap = new HashMap<>();
     private HashMap<String, List<String>> videoCodecMap = new HashMap<>();
@@ -145,25 +142,6 @@ public class MainActivity extends AppCompatActivity
         }
     };
 
-    private View.OnClickListener subscribe = new View.OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            subscribeRemoteStreamChoice = 0;
-            subscribeVideoCodecChoice = 0;
-            subscribeSimulcastRidChoice = 0;
-            final String[] items = (String[]) remoteStreamIdList.toArray(new String[0]);
-            AlertDialog.Builder singleChoiceDialog =
-                    new AlertDialog.Builder(MainActivity.this);
-            singleChoiceDialog.setTitle("Remote Stream List");
-            singleChoiceDialog.setSingleChoiceItems(getRemoteStreamNameList(items), 0,
-                    (dialog, which) -> subscribeRemoteStreamChoice = which);
-            singleChoiceDialog.setPositiveButton("ok",
-                    (dialog, which) -> chooseCodec(
-                            remoteStreamMap.get(items[subscribeRemoteStreamChoice])));
-            singleChoiceDialog.show();
-        }
-    };
-
     private String[] getRemoteStreamNameList(String[] items) {
         String[] ret = new String[items.length];
         for (int i = 0; i < items.length; i++) {
@@ -192,18 +170,6 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void onClick(View v) {
             executor.execute(() -> conferenceClient.leave());
-        }
-    };
-
-    private View.OnClickListener unSubscribe = new View.OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            runOnUiThread(() -> {
-                unSubscribeBtn.setVisibility(View.GONE);
-                subscribeBtn.setVisibility(View.VISIBLE);
-            });
-            subscribeRemoteStreamChoice = 0;
-            subscribeVideoCodecChoice = 0;
         }
     };
 
@@ -677,42 +643,6 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    public void chooseCodec(RemoteStream remoteStream) {
-        List<String> videoCodecList = videoCodecMap.get(remoteStream.id());
-        removeDuplicate(videoCodecList);
-        final String[] items = videoCodecList.toArray(new String[0]);
-        AlertDialog.Builder singleChoiceDialog =
-                new AlertDialog.Builder(MainActivity.this);
-        singleChoiceDialog.setTitle("VideoCodec List");
-        singleChoiceDialog.setSingleChoiceItems(items, 0,
-                (dialog, which) -> subscribeVideoCodecChoice = which);
-        singleChoiceDialog.setPositiveButton("ok",
-                (dialog, which) -> {
-                    String chooseVideoCodec = items[subscribeVideoCodecChoice];
-                    if (simulcastStreamMap.containsKey(remoteStream.id())) {
-                        chooseRid(remoteStream, chooseVideoCodec);
-                    } else {
-                        subscribeForward(remoteStream, chooseVideoCodec, null);
-                    }
-
-                });
-        singleChoiceDialog.show();
-    }
-
-    public void chooseRid(RemoteStream remoteStream, String videoCodec) {
-        List<String> ridList = simulcastStreamMap.get(remoteStream.id());
-        removeDuplicate(ridList);
-        final String[] items = (String[]) ridList.toArray(new String[0]);
-        AlertDialog.Builder singleChoiceDialog =
-                new AlertDialog.Builder(MainActivity.this);
-        singleChoiceDialog.setTitle("Rid List");
-        singleChoiceDialog.setSingleChoiceItems(items, 0,
-                (dialog, which) -> subscribeSimulcastRidChoice = which);
-        singleChoiceDialog.setPositiveButton("ok",
-                (dialog, which) -> subscribeForward(remoteStream, videoCodec, items[subscribeSimulcastRidChoice]));
-        singleChoiceDialog.show();
-    }
-
     public void subscribeForward(RemoteStream remoteStream, String videoCodec, String rid) {
         VideoSubscriptionConstraints.Builder videoOptionBuilder =
                 VideoSubscriptionConstraints.builder();
@@ -751,11 +681,6 @@ public class MainActivity extends AppCompatActivity
                     @Override
                     public void onSuccess(Subscription result) {
                         rendererAdapter.attachRemoteStream(result, remoteStream);
-                        runOnUiThread(() -> {
-                            subscribeBtn.setVisibility(View.GONE);
-                            unSubscribeBtn.setVisibility(View.VISIBLE);
-                        });
-
                     }
 
                     @Override
