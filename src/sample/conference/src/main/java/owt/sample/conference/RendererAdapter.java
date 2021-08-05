@@ -111,13 +111,14 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
-    private void safetyAttach(Stream stream, SurfaceViewRenderer renderer) {
+    private void safetyAttach(Stream stream,@NonNull SurfaceViewRenderer renderer) {
         try {
             stream.attach(renderer);
         } catch (Exception e) {
             e.printStackTrace();
         }
         setVisibility(renderer, View.VISIBLE);
+        renderer.setMirror(stream instanceof LocalStream);
     }
 
     private void safetyDetach(Stream stream, SurfaceViewRenderer renderer) {
@@ -143,6 +144,10 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     public void attachRemoteStream(Subscription subscription, @NonNull RemoteStream stream) {
         Log.d(TAG, "attachRemoteStream() called with: subscription = [" + subscription.id + "], stream = [" + stream.id() + "]");
         Item item = getOrCreateItem(stream.origin(), stream);
+        if (item.stream instanceof LocalStream) {
+            Log.d(TAG, "attachRemoteStream: ignore local user");
+            return;
+        }
         item.stream = stream;
         item.participantId = stream.origin();
         item.subscription = subscription;
