@@ -57,6 +57,7 @@ public class VideoFragment extends Fragment {
         fullRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
         fullRenderer.setEnableHardwareScaler(true);
         fullRenderer.setZOrderMediaOverlay(true);
+        fullRenderer.setZOrderOnTop(false);
 
         adapter = new RendererAdapter(((MainActivity) getActivity()).rootEglBase, fullRenderer);
         rvRemote.setAdapter(adapter);

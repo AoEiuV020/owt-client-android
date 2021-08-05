@@ -362,6 +362,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             renderer.setMirror(true);
             renderer.setEnableHardwareScaler(true);
             renderer.setZOrderMediaOverlay(true);
+            renderer.setZOrderOnTop(true);
         }
 
     }
