@@ -84,7 +84,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
                 if (oldStream != null) {
                     safetyDetach(oldStream, renderer);
                 }
-                stream.attach(renderer);
+                safetyAttach(stream, renderer);
                 renderer.setTag(R.id.tag_stream, stream);
             }
         } else {
@@ -111,7 +111,17 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
+    private void safetyAttach(Stream stream, SurfaceViewRenderer renderer) {
+        try {
+            stream.attach(renderer);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        setVisibility(renderer, View.VISIBLE);
+    }
+
     private void safetyDetach(Stream stream, SurfaceViewRenderer renderer) {
+        setVisibility(renderer, View.GONE);
         try {
             stream.detach(renderer);
         } catch (Exception e) {
@@ -274,7 +284,14 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         if (selectedItem != null) {
             Item item = selectedItem;
             int index = data.indexOf(item);
-            if (index != -1) {
+            if (index != -1 && item.stream != null) {
+                _attackStream(item.stream, fullRenderer);
+                return;
+            }
+        }
+        for (int i = data.size() - 1; i >= 0; i--) {
+            Item item = data.get(i);
+            if (item.stream != null) {
                 _attackStream(item.stream, fullRenderer);
                 return;
             }
