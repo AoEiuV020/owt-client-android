@@ -111,18 +111,17 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
-    private void safetyAttach(Stream stream,@NonNull SurfaceViewRenderer renderer) {
+    private void safetyAttach(Stream stream, @NonNull SurfaceViewRenderer renderer) {
         try {
             stream.attach(renderer);
         } catch (Exception e) {
             e.printStackTrace();
         }
-        setVisibility(renderer, View.VISIBLE);
         renderer.setMirror(stream instanceof LocalStream);
     }
 
-    private void safetyDetach(Stream stream, SurfaceViewRenderer renderer) {
-        setVisibility(renderer, View.GONE);
+    private void safetyDetach(Stream stream, @NonNull SurfaceViewRenderer renderer) {
+        renderer.clearImage();
         try {
             stream.detach(renderer);
         } catch (Exception e) {
