@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.UiThread;
 import android.support.annotation.WorkerThread;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
@@ -18,30 +19,26 @@ import org.webrtc.RTCStatsReport;
 import org.webrtc.SurfaceViewRenderer;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import owt.base.ActionCallback;
+import owt.base.LocalStream;
+import owt.base.RemoteStream;
 import owt.base.Stream;
-import owt.conference.RemoteStream;
+import owt.conference.Publication;
 import owt.conference.Subscription;
 
 public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHolder> {
     private static final String TAG = "RendererAdapter";
-    private List<UserInfo> data = new ArrayList<>();
-    private Map<String, Stream> streamMap = new HashMap<>();
-    private Map<String, Subscription> subscriptionMap = new HashMap<>();
-    private Map<String, SurfaceViewRenderer> rendererMap = new HashMap<>();
-    private EglBase rootEglBase;
+    private final List<Item> data = new ArrayList<>();
+    private final EglBase rootEglBase;
     @NonNull
-    private SurfaceViewRenderer fullRenderer;
+    private final SurfaceViewRenderer fullRenderer;
     @Nullable
-    private String selectedParticipantId;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Item selectedItem;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    public RendererAdapter(EglBase rootEglBase,@NonNull SurfaceViewRenderer fullRenderer) {
+    public RendererAdapter(EglBase rootEglBase, @NonNull SurfaceViewRenderer fullRenderer) {
         this.rootEglBase = rootEglBase;
         this.fullRenderer = fullRenderer;
         setHasStableIds(true);
@@ -55,19 +52,15 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
 
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, int i) {
-        UserInfo userInfo = data.get(i);
-        Stream stream = streamMap.get(userInfo.getParticipantId());
-        SurfaceViewRenderer renderer = viewHolder.renderer;
-        rendererMap.put(userInfo.getParticipantId(), renderer);
-        _attackStream(userInfo.getParticipantId(), stream, renderer);
+        Item item = data.get(i);
+        Stream stream = item.stream;
+        _detachStream(stream, item.renderer);
+        item.renderer = viewHolder.renderer;
+        _attackStream(stream, item.renderer);
         viewHolder.itemView.setOnClickListener(view -> {
-            changeFullUser(userInfo);
+            selectedItem = item;
+            updateFullVideo();
         });
-    }
-
-    private void changeFullUser(UserInfo userInfo) {
-        selectedParticipantId = userInfo.getParticipantId();
-        updateFullVideo();
     }
 
     @Override
@@ -80,9 +73,9 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         return position;
     }
 
-    private void _attackStream(String participantId, Stream stream, SurfaceViewRenderer renderer) {
+    private void _attackStream(Stream stream, SurfaceViewRenderer renderer) {
         if (renderer == null) {
-            Log.w(TAG, "_attackStream: renderer not found participantId = " + participantId);
+            Log.w(TAG, "_attackStream: renderer not found");
             return;
         }
         Stream oldStream = (Stream) renderer.getTag(R.id.tag_stream);
@@ -102,13 +95,13 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
-    private void _detachStream(String participantId, Stream stream, SurfaceViewRenderer renderer) {
+    private void _detachStream(Stream stream, SurfaceViewRenderer renderer) {
         if (stream == null) {
-            Log.w(TAG, "_detachStream: stream not found participantId = " + participantId);
+            Log.w(TAG, "_detachStream: stream not found");
             return;
         }
         if (renderer == null) {
-            Log.w(TAG, "_detachStream: renderer not found participantId = " + participantId);
+            Log.w(TAG, "_detachStream: renderer not found");
             return;
         }
         Stream oldStream = (Stream) renderer.getTag(R.id.tag_stream);
@@ -121,58 +114,56 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     private void safetyDetach(Stream stream, SurfaceViewRenderer renderer) {
         try {
             stream.detach(renderer);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
     @WorkerThread
-    public void attachStream(String participantId, Stream stream) {
-        streamMap.put(participantId, stream);
-        SurfaceViewRenderer renderer = rendererMap.get(participantId);
-        _attackStream(participantId, stream, renderer);
-        mainHandler.post(() -> {
-            updateFullVideo();
-            notifyItemIfExists(getIndexById(participantId));
-        });
+    public void attachLocalStream(String participantId, Publication publication, LocalStream stream) {
+        Log.d(TAG, "attachLocalStream() called with: participantId = [" + participantId + "], publication = [" + publication.id() + "], stream = [" + stream.id() + "]");
+        Item item = getOrCreateItem(participantId, stream);
+        item.stream = stream;
+        item.publication = publication;
+        _attackStream(item.stream, item.renderer);
+        updateFullVideo();
     }
 
     @WorkerThread
-    public void attachRemoteStream(String participantId, Subscription subscription, RemoteStream remoteStream) {
-        subscriptionMap.put(participantId, subscription);
-        attachStream(participantId, remoteStream);
+    public void attachRemoteStream(Subscription subscription, @NonNull RemoteStream stream) {
+        Log.d(TAG, "attachRemoteStream() called with: subscription = [" + subscription.id + "], stream = [" + stream.id() + "]");
+        Item item = getOrCreateItem(stream.origin(), stream);
+        item.stream = stream;
+        item.participantId = stream.origin();
+        item.subscription = subscription;
+        _attackStream(item.stream, item.renderer);
+        updateFullVideo();
     }
 
     @WorkerThread
-    public void detachStream(String participantId) {
-        Stream stream = streamMap.remove(participantId);
-        SurfaceViewRenderer renderer = rendererMap.get(participantId);
-        _detachStream(participantId, stream, renderer);
-        if (TextUtils.equals(participantId, selectedParticipantId)) {
-            _detachStream(participantId, stream, fullRenderer);
-            selectedParticipantId = null;
+    public void detachLocalStream(String participantId, LocalStream stream) {
+        Log.d(TAG, "detachLocalStream() called with: participantId = [" + participantId + "], stream = [" + stream.id() + "]");
+        Item item = getOrCreateItem(participantId, stream);
+        _detachStream(item.stream, item.renderer);
+        item.stream = null;
+        if (item.publication != null) {
+            item.publication.stop();
         }
-        mainHandler.post(() -> {
-            updateFullVideo();
-            notifyItemIfExists(getIndexById(participantId));
-        });
+        item.publication = null;
+        updateFullVideo();
     }
 
     @WorkerThread
-    public void detachRemoteStream(String participantId) {
-        detachStream(participantId);
-        Subscription subscription = subscriptionMap.remove(participantId);
-        if (subscription != null) {
-            subscription.stop();
+    public void detachRemoteStream(RemoteStream stream) {
+        Log.d(TAG, "detachRemoteStream() called with: stream = [" + stream.id() + "]");
+        Item item = getOrCreateItem(stream.origin(), stream);
+        _detachStream(item.stream, item.renderer);
+        item.stream = null;
+        if (item.subscription != null) {
+            item.subscription.stop();
+            item.subscription = null;
         }
-    }
-
-    public void detachAllRemoteStream(String selfParticipantId) {
-        for (UserInfo userInfo : data) {
-            if (TextUtils.equals(userInfo.getParticipantId(), selfParticipantId)) {
-                continue;
-            }
-            detachRemoteStream(userInfo.getParticipantId());
-        }
+        updateFullVideo();
     }
 
     private void notifyItemIfExists(int pos) {
@@ -183,83 +174,126 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         notifyItemChanged(pos);
     }
 
-    private int getIndexById(String participantId) {
+    private int getIndexByParticipantId(String participantId) {
         for (int i = 0; i < data.size(); i++) {
-            UserInfo userInfo = data.get(i);
-            if (TextUtils.equals(userInfo.getParticipantId(), participantId)) {
+            Item item = data.get(i);
+            if (TextUtils.equals(item.participantId, participantId)) {
                 return i;
             }
         }
         return -1;
     }
 
-    public void add(UserInfo userInfo) {
-        Log.d(TAG, "add() called with: userInfo = [" + userInfo + "]");
-        data.add(userInfo);
-        updateFullVideo();
-        notifyItemInserted(data.size() - 1);
+    private Item getOrCreateItem(String participantId, Stream stream) {
+        Item item = getItemByParticipantId(participantId);
+        if (item == null) {
+            item = new Item(participantId, stream);
+            Item finalItem = item;
+            runOnUiThread(() -> {
+                data.add(finalItem);
+                notifyItemInserted(data.size() - 1);
+            });
+        }
+        return item;
     }
 
-    public void update(UserInfo userInfo) {
+    private boolean notUiThread() {
+        return Looper.myLooper() != uiHandler.getLooper();
+    }
+
+    public final void runOnUiThread(Runnable action) {
+        if (notUiThread()) {
+            uiHandler.post(action);
+        } else {
+            action.run();
+        }
+    }
+
+    @Nullable
+    private Item getItemByParticipantId(String participantId) {
+        Item item;
+        int index = getIndexByParticipantId(participantId);
+        if (index == -1) {
+            item = null;
+        } else {
+            item = data.get(index);
+        }
+        return item;
+    }
+
+    @UiThread
+    public void add(String participantId, @Nullable UserInfo userInfo) {
+        Log.d(TAG, "add() called with: participantId = [" + participantId + "], userInfo = [" + userInfo + "]");
+        int index = getIndexByParticipantId(participantId);
+        if (index == -1) {
+            Item item = new Item(participantId);
+            item.userInfo = userInfo;
+            data.add(item);
+            notifyItemInserted(data.size() - 1);
+            return;
+        }
+        Item item = data.get(index);
+        item.userInfo = userInfo;
+        notifyItemIfExists(index);
+        updateFullVideo();
+    }
+
+    @UiThread
+    public void update(@NonNull UserInfo userInfo) {
         Log.d(TAG, "update() called with: userInfo = [" + userInfo + "]");
-        int index = getIndexById(userInfo.getParticipantId());
+        int index = getIndexByParticipantId(userInfo.getParticipantId());
         if (index == -1) {
             Log.w(TAG, "update: not found " + userInfo);
-            add(userInfo);
             return;
         }
-        data.set(index, userInfo);
-        updateFullVideo();
+        Item item = data.get(index);
+        item.userInfo = userInfo;
         notifyItemIfExists(index);
+        updateFullVideo();
     }
 
-    public void remove(UserInfo userInfo) {
-        Log.d(TAG, "remove() called with: userInfo = [" + userInfo + "]");
-        int index = getIndexById(userInfo.getParticipantId());
+    @UiThread
+    public void remove(String participantId, @Nullable UserInfo userInfo) {
+        Log.d(TAG, "remove() called with: participantId = [" + participantId + "], userInfo = [" + userInfo + "]");
+        int index = getIndexByParticipantId(participantId);
         if (index == -1) {
-            Log.e(TAG, "remove: not found " + userInfo);
+            Log.e(TAG, "remove: not found participantId = " + participantId);
             return;
         }
-        data.remove(index);
-        Stream stream = streamMap.remove(userInfo.getParticipantId());
-        subscriptionMap.remove(userInfo.getParticipantId());
-        SurfaceViewRenderer renderer = rendererMap.remove(userInfo.getParticipantId());
-        if (TextUtils.equals(selectedParticipantId, userInfo.getParticipantId())) {
-            _detachStream(userInfo.getParticipantId(), stream, fullRenderer);
-            selectedParticipantId = null;
-            updateFullVideo();
-        }
-        _detachStream(userInfo.getParticipantId(), stream, renderer);
+        Item item = data.remove(index);
+        _detachStream(item.stream, item.renderer);
+        item.stream = null;
+        item.publication = null;
+        item.subscription = null;
+        item.renderer = null;
         notifyItemRemoved(index);
+        updateFullVideo();
     }
 
     private void updateFullVideo() {
-        if (!TextUtils.isEmpty(selectedParticipantId)) {
-            String id = selectedParticipantId;
-            Stream stream = streamMap.get(id);
-            fullRenderer.setVisibility(View.VISIBLE);
-            _attackStream(id, stream, fullRenderer);
-            return;
-        }
-        for (int i = data.size() - 1; i >= 0; i--) {
-            UserInfo userInfo = data.get(i);
-            String id = userInfo.getParticipantId();
-            Stream stream = streamMap.get(id);
-            if (stream != null) {
-                fullRenderer.setVisibility(View.VISIBLE);
-                _attackStream(id, stream, fullRenderer);
+        if (selectedItem != null) {
+            Item item = selectedItem;
+            int index = data.indexOf(item);
+            if (index != -1) {
+                _attackStream(item.stream, fullRenderer);
                 return;
             }
         }
-        fullRenderer.setVisibility(View.GONE);
+        Stream oldStream = (Stream) fullRenderer.getTag(R.id.tag_stream);
+        _detachStream(oldStream, fullRenderer);
+    }
+
+    private void setVisibility(View view, int visibility) {
+        if (notUiThread()) {
+            uiHandler.post(() -> view.setVisibility(visibility));
+        } else {
+            view.setVisibility(visibility);
+        }
     }
 
     public void onStop() {
-        for (UserInfo userInfo : data) {
-            _detachStream(userInfo.getParticipantId(),
-                    streamMap.get(userInfo.getParticipantId()),
-                    rendererMap.get(userInfo.getParticipantId())
-            );
+        for (Item item : data) {
+            _detachStream(item.stream, item.renderer);
         }
     }
 
@@ -269,12 +303,36 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     }
 
     public void getStatus(ActionCallback<RTCStatsReport> rtcStatsReportActionCallback) {
-        Collection<Subscription> subscriptions = subscriptionMap.values();
-        if (!subscriptions.isEmpty()) {
-            for (Subscription subscription : subscriptions) {
-                subscription.getStats(rtcStatsReportActionCallback);
-                break;
+        if (selectedItem != null) {
+            Item item = selectedItem;
+            if (item.subscription != null) {
+                item.subscription.getStats(rtcStatsReportActionCallback);
             }
+        }
+    }
+
+    public static class Item {
+        @NonNull
+        private String participantId;
+        @Nullable
+        @SuppressWarnings("unused")
+        private UserInfo userInfo;
+        @Nullable
+        private Stream stream;
+        @Nullable
+        private Publication publication;
+        @Nullable
+        private Subscription subscription;
+        @Nullable
+        private SurfaceViewRenderer renderer;
+
+        public Item(@NonNull String participantId, @NonNull Stream stream) {
+            this.participantId = participantId;
+            this.stream = stream;
+        }
+
+        public Item(@NonNull String participantId) {
+            this.participantId = participantId;
         }
     }
 

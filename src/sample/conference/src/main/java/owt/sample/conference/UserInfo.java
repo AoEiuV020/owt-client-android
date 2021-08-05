@@ -7,7 +7,6 @@ import java.util.Arrays;
 @SuppressWarnings("unused")
 public class UserInfo {
     private String participantId;
-    private String streamId;
     private String username;
     private String avatarUrl;
 
@@ -15,7 +14,6 @@ public class UserInfo {
     public String toString() {
         return "UserInfo{" +
                 "participantId='" + participantId + '\'' +
-                ", streamId='" + streamId + '\'' +
                 ", username='" + username + '\'' +
                 ", avatarUrl='" + avatarUrl + '\'' +
                 '}';
@@ -40,14 +38,6 @@ public class UserInfo {
 
     public void setParticipantId(String participantId) {
         this.participantId = participantId;
-    }
-
-    public String getStreamId() {
-        return streamId;
-    }
-
-    public void setStreamId(String streamId) {
-        this.streamId = streamId;
     }
 
     public String getUsername() {
