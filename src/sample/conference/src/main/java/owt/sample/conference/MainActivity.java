@@ -118,17 +118,9 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void onClick(View v) {
             if (fullScreen) {
-                ActionBar actionBar = getSupportActionBar();
-                if (actionBar != null) {
-                    actionBar.hide();
-                }
                 bottomView.setVisibility(View.GONE);
                 fullScreen = false;
             } else {
-                ActionBar actionBar = getSupportActionBar();
-                if (actionBar != null) {
-                    actionBar.show();
-                }
                 bottomView.setVisibility(View.VISIBLE);
                 fullScreen = true;
             }
@@ -409,6 +401,10 @@ public class MainActivity extends AppCompatActivity
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
                 | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.hide();
+        }
 
         fullScreen = true;
         bottomView = findViewById(R.id.bottom_bar);
