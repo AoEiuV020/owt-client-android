@@ -13,19 +13,20 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import org.webrtc.EglBase;
 import org.webrtc.RTCStats;
 import org.webrtc.RTCStatsReport;
-import org.webrtc.RendererCommon;
-import org.webrtc.SurfaceViewRenderer;
 
 import java.math.BigInteger;
 import java.util.Map;
+
+import owt.sample.conference.view.LargeVideo;
 
 
 public class VideoFragment extends Fragment {
 
     private VideoFragmentListener listener;
-    private SurfaceViewRenderer fullRenderer;
+    private LargeVideo largeVideo;
     private RecyclerView rvRemote;
     private TextView statsInView, statsOutView;
     private BigInteger lastBytesSent = BigInteger.valueOf(0);
@@ -51,18 +52,15 @@ public class VideoFragment extends Fragment {
         statsOutView = mView.findViewById(R.id.stats_out);
         statsOutView.setVisibility(View.GONE);
 
-        fullRenderer = mView.findViewById(R.id.full_renderer);
+        largeVideo = mView.findViewById(R.id.largeVideo);
         rvRemote = mView.findViewById(R.id.rvSmallRenderer);
-        fullRenderer.init(((MainActivity) getActivity()).rootEglBase.getEglBaseContext(), null);
-        fullRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
-        fullRenderer.setEnableHardwareScaler(true);
-        fullRenderer.setZOrderMediaOverlay(true);
-        fullRenderer.setZOrderOnTop(false);
+        EglBase.Context eglBaseContext = ((MainActivity) getActivity()).rootEglBase.getEglBaseContext();
+        largeVideo.initEgl(eglBaseContext);
 
-        adapter = new RendererAdapter(((MainActivity) getActivity()).rootEglBase, fullRenderer);
+        adapter = new RendererAdapter(eglBaseContext, largeVideo.getParticipantView());
         rvRemote.setAdapter(adapter);
 
-        listener.onRenderer(adapter);
+        listener.onAdapter(adapter);
         clearStats(true);
         clearStats(false);
         return mView;
@@ -148,6 +146,6 @@ public class VideoFragment extends Fragment {
     }
 
     public interface VideoFragmentListener {
-        void onRenderer(RendererAdapter adapter);
+        void onAdapter(RendererAdapter adapter);
     }
 }

@@ -16,7 +16,6 @@ import android.view.ViewGroup;
 
 import org.webrtc.EglBase;
 import org.webrtc.RTCStatsReport;
-import org.webrtc.SurfaceViewRenderer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,36 +26,38 @@ import owt.base.RemoteStream;
 import owt.base.Stream;
 import owt.conference.Publication;
 import owt.conference.Subscription;
+import owt.sample.conference.view.ParticipantView;
+import owt.sample.conference.view.Thumbnail;
 
 public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHolder> {
     private static final String TAG = "RendererAdapter";
     private final List<Item> data = new ArrayList<>();
-    private final EglBase rootEglBase;
+    private final EglBase.Context eglBaseContext;
     @NonNull
-    private final SurfaceViewRenderer fullRenderer;
+    private final ParticipantView fullParticipantView;
     @Nullable
     private Item selectedItem;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    public RendererAdapter(EglBase rootEglBase, @NonNull SurfaceViewRenderer fullRenderer) {
-        this.rootEglBase = rootEglBase;
-        this.fullRenderer = fullRenderer;
+    public RendererAdapter(EglBase.Context eglBaseContext, @NonNull ParticipantView fullParticipantView) {
+        this.eglBaseContext = eglBaseContext;
+        this.fullParticipantView = fullParticipantView;
         setHasStableIds(true);
     }
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
         View itemView = LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.item_remote_video, viewGroup, false);
-        return new ViewHolder(itemView);
+        return new ViewHolder(itemView, eglBaseContext);
     }
 
     @Override
     public void onBindViewHolder(ViewHolder viewHolder, int i) {
         Item item = data.get(i);
         Stream stream = item.stream;
-        _detachStream(stream, item.renderer);
-        item.renderer = viewHolder.renderer;
-        _attackStream(stream, item.renderer);
+        _detachStream(stream, item.participantView);
+        item.participantView = viewHolder.thumbnail.getParticipantView();
+        _attackStream(stream, item.participantView);
         viewHolder.itemView.setOnClickListener(view -> {
             selectedItem = item;
             updateFullVideo();
@@ -73,29 +74,15 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         return position;
     }
 
-    private void _attackStream(Stream stream, SurfaceViewRenderer renderer) {
+    private void _attackStream(Stream stream, ParticipantView renderer) {
         if (renderer == null) {
             Log.w(TAG, "_attackStream: renderer not found");
             return;
         }
-        Stream oldStream = (Stream) renderer.getTag(R.id.tag_stream);
-        if (stream != null) {
-            if (oldStream != stream) {
-                if (oldStream != null) {
-                    safetyDetach(oldStream, renderer);
-                }
-                safetyAttach(stream, renderer);
-                renderer.setTag(R.id.tag_stream, stream);
-            }
-        } else {
-            if (oldStream != null) {
-                safetyDetach(oldStream, renderer);
-                renderer.setTag(R.id.tag_stream, null);
-            }
-        }
+        renderer.attachStream(stream);
     }
 
-    private void _detachStream(Stream stream, SurfaceViewRenderer renderer) {
+    private void _detachStream(Stream stream, ParticipantView renderer) {
         if (stream == null) {
             Log.w(TAG, "_detachStream: stream not found");
             return;
@@ -104,29 +91,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             Log.w(TAG, "_detachStream: renderer not found");
             return;
         }
-        Stream oldStream = (Stream) renderer.getTag(R.id.tag_stream);
-        if (oldStream == stream) {
-            safetyDetach(stream, renderer);
-            renderer.setTag(R.id.tag_stream, null);
-        }
-    }
-
-    private void safetyAttach(Stream stream, @NonNull SurfaceViewRenderer renderer) {
-        try {
-            stream.attach(renderer);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        renderer.setMirror(stream instanceof LocalStream);
-    }
-
-    private void safetyDetach(Stream stream, @NonNull SurfaceViewRenderer renderer) {
-        renderer.clearImage();
-        try {
-            stream.detach(renderer);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        renderer.detachStream(stream);
     }
 
     @WorkerThread
@@ -135,7 +100,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         Item item = getOrCreateItem(participantId, stream);
         item.stream = stream;
         item.publication = publication;
-        _attackStream(item.stream, item.renderer);
+        _attackStream(item.stream, item.participantView);
         updateFullVideo();
     }
 
@@ -150,7 +115,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         item.stream = stream;
         item.participantId = stream.origin();
         item.subscription = subscription;
-        _attackStream(item.stream, item.renderer);
+        _attackStream(item.stream, item.participantView);
         updateFullVideo();
     }
 
@@ -158,7 +123,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     public void detachLocalStream(String participantId, LocalStream stream) {
         Log.d(TAG, "detachLocalStream() called with: participantId = [" + participantId + "], stream = [" + stream.id() + "]");
         Item item = getOrCreateItem(participantId, stream);
-        _detachStream(item.stream, item.renderer);
+        _detachStream(item.stream, item.participantView);
         item.stream = null;
         if (item.publication != null) {
             item.publication.stop();
@@ -171,7 +136,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     public void detachRemoteStream(RemoteStream stream) {
         Log.d(TAG, "detachRemoteStream() called with: stream = [" + stream.id() + "]");
         Item item = getOrCreateItem(stream.origin(), stream);
-        _detachStream(item.stream, item.renderer);
+        _detachStream(item.stream, item.participantView);
         item.stream = null;
         if (item.subscription != null) {
             item.subscription.stop();
@@ -275,11 +240,11 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             return;
         }
         Item item = data.remove(index);
-        _detachStream(item.stream, item.renderer);
+        _detachStream(item.stream, item.participantView);
         item.stream = null;
         item.publication = null;
         item.subscription = null;
-        item.renderer = null;
+        item.participantView = null;
         notifyItemRemoved(index);
         updateFullVideo();
     }
@@ -289,19 +254,19 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             Item item = selectedItem;
             int index = data.indexOf(item);
             if (index != -1 && item.stream != null) {
-                _attackStream(item.stream, fullRenderer);
+                _attackStream(item.stream, fullParticipantView);
                 return;
             }
         }
         for (int i = data.size() - 1; i >= 0; i--) {
             Item item = data.get(i);
             if (item.stream != null) {
-                _attackStream(item.stream, fullRenderer);
+                _attackStream(item.stream, fullParticipantView);
                 return;
             }
         }
-        Stream oldStream = (Stream) fullRenderer.getTag(R.id.tag_stream);
-        _detachStream(oldStream, fullRenderer);
+        Stream oldStream = (Stream) fullParticipantView.getTag(R.id.tag_stream);
+        _detachStream(oldStream, fullParticipantView);
     }
 
     private void setVisibility(View view, int visibility) {
@@ -314,7 +279,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
 
     public void onStop() {
         for (Item item : data) {
-            _detachStream(item.stream, item.renderer);
+            _detachStream(item.stream, item.participantView);
         }
     }
 
@@ -345,7 +310,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         @Nullable
         private Subscription subscription;
         @Nullable
-        private SurfaceViewRenderer renderer;
+        private ParticipantView participantView;
 
         public Item(@NonNull String participantId, @NonNull Stream stream) {
             this.participantId = participantId;
@@ -357,16 +322,12 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         }
     }
 
-    public class ViewHolder extends RecyclerView.ViewHolder {
-        private final SurfaceViewRenderer renderer = itemView.findViewById(R.id.renderer);
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        private final Thumbnail thumbnail = itemView.findViewById(R.id.thumbnail);
 
-        public ViewHolder(View itemView) {
+        public ViewHolder(View itemView, EglBase.Context eglBaseContext) {
             super(itemView);
-            renderer.init(rootEglBase.getEglBaseContext(), null);
-            renderer.setMirror(true);
-            renderer.setEnableHardwareScaler(true);
-            renderer.setZOrderMediaOverlay(true);
-            renderer.setZOrderOnTop(true);
+            thumbnail.initEgl(eglBaseContext);
         }
 
     }
