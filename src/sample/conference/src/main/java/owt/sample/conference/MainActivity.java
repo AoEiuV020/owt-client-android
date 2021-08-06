@@ -141,6 +141,7 @@ public class MainActivity extends AppCompatActivity
             settingsCurrent = !settingsCurrent;
         }
     };
+    private String avatarUrl;
 
     private String[] getRemoteStreamNameList(String[] items) {
         String[] ret = new String[items.length];
@@ -333,7 +334,7 @@ public class MainActivity extends AppCompatActivity
         UserInfo ret = new UserInfo();
         String rand = UUID.randomUUID().toString().substring(0, 4);
         ret.setUsername(android.os.Build.MODEL + "-" + rand);
-        ret.setAvatarUrl("http://api.btstu.cn/sjtx/api.php#" + rand);
+        ret.setAvatarUrl(avatarUrl);
         return ret;
     }
 
@@ -391,6 +392,15 @@ public class MainActivity extends AppCompatActivity
         switchFragment(loginFragment);
 
         initConferenceClient();
+
+        initAvatarUrl();
+    }
+
+    private void initAvatarUrl() {
+        executor.execute(() -> {
+            String json = HttpUtils.request("http://api.btstu.cn/sjtx/api.php?format=json", "GET", "", false);
+            avatarUrl = JSON.parseObject(json).getString("imgurl");
+        });
     }
 
     @Override
