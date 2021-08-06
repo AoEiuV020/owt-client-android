@@ -46,6 +46,6 @@ public class LargeVideo extends RelativeLayout {
 
     public void initEgl(EglBase.Context eglBaseContext) {
         participantView.initEgl(eglBaseContext);
-        participantView.setZOrderOnTop(false);
+        participantView.setOnTop(false);
     }
 }

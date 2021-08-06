@@ -7,4 +7,12 @@
         android:id="@+id/renderer"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <ImageView
+        android:id="@+id/ivAvatar"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#5E6D7A"
+        android:scaleType="fitCenter"
+        android:src="@drawable/default_avatar" />
 </merge>

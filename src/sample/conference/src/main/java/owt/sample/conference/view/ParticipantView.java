@@ -2,10 +2,18 @@ package owt.sample.conference.view;
 
 import android.content.Context;
 import android.os.Build;
+import android.os.Looper;
+import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
+import android.support.annotation.UiThread;
+import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
+
+import com.bumptech.glide.Glide;
 
 import org.webrtc.EglBase;
 import org.webrtc.SurfaceViewRenderer;
@@ -13,10 +21,17 @@ import org.webrtc.SurfaceViewRenderer;
 import owt.base.LocalStream;
 import owt.base.Stream;
 import owt.sample.conference.R;
+import owt.sample.conference.UserInfo;
 
 public class ParticipantView extends RelativeLayout {
+    private static final String TAG = "ParticipantView";
     private SurfaceViewRenderer renderer;
     private Stream stream;
+    @Nullable
+    private UserInfo userInfo;
+    private ImageView ivAvatar;
+    private boolean onTop;
+
     public ParticipantView(Context context) {
         super(context);
         init();
@@ -45,6 +60,7 @@ public class ParticipantView extends RelativeLayout {
     private void init() {
         View.inflate(getContext(), R.layout.view_participant, this);
         renderer = findViewById(R.id.renderer);
+        ivAvatar = findViewById(R.id.ivAvatar);
     }
 
     public void initEgl(EglBase.Context eglBaseContext) {
@@ -54,8 +70,9 @@ public class ParticipantView extends RelativeLayout {
         renderer.setZOrderMediaOverlay(true);
     }
 
-    public void setZOrderOnTop(boolean b) {
-        renderer.setZOrderOnTop(b);
+    public void setOnTop(boolean onTop) {
+        this.onTop = onTop;
+        renderer.setZOrderMediaOverlay(onTop);
     }
 
     public void attachStream(Stream stream) {
@@ -80,6 +97,7 @@ public class ParticipantView extends RelativeLayout {
             _detachStream();
         }
     }
+
     private void _attachStream(Stream stream) {
         this.stream = stream;
         try {
@@ -88,6 +106,26 @@ public class ParticipantView extends RelativeLayout {
             e.printStackTrace();
         }
         renderer.setMirror(stream instanceof LocalStream);
+        updateAvatar();
+    }
+
+    private boolean notUiThread() {
+        return Looper.myLooper() != Looper.getMainLooper();
+    }
+
+    private void updateAvatar() {
+        Log.d(TAG, "updateAvatar() called: stream is null " + (stream == null));
+        if (notUiThread()) {
+            getHandler().post(this::updateAvatar);
+            return;
+        }
+        if (stream != null) {
+            ivAvatar.setVisibility(View.GONE);
+            renderer.setZOrderMediaOverlay(onTop);
+        } else {
+            ivAvatar.setVisibility(View.VISIBLE);
+            renderer.setZOrderMediaOverlay(false);
+        }
     }
 
     private void _detachStream() {
@@ -98,6 +136,19 @@ public class ParticipantView extends RelativeLayout {
             e.printStackTrace();
         }
         this.stream = null;
+        updateAvatar();
     }
 
+    @UiThread
+    public void setUserInfo(@Nullable UserInfo userInfo) {
+        if (this.userInfo == userInfo) {
+            return;
+        }
+        this.userInfo = userInfo;
+        if (userInfo == null || TextUtils.isEmpty(userInfo.getAvatarUrl())) {
+            ivAvatar.setImageResource(R.drawable.default_avatar);
+            return;
+        }
+        Glide.with(getContext()).load(userInfo.getAvatarUrl()).into(ivAvatar);
+    }
 }

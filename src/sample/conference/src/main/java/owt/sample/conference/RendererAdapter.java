@@ -55,9 +55,12 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     public void onBindViewHolder(ViewHolder viewHolder, int i) {
         Item item = data.get(i);
         Stream stream = item.stream;
-        _detachStream(stream, item.participantView);
-        item.participantView = viewHolder.thumbnail.getParticipantView();
-        _attackStream(stream, item.participantView);
+        if (item.participantView != viewHolder.thumbnail.getParticipantView()) {
+            _detachStream(stream, item.participantView);
+            item.participantView = viewHolder.thumbnail.getParticipantView();
+            _attackStream(stream, item.participantView);
+        }
+        item.participantView.setUserInfo(item.userInfo);
         viewHolder.itemView.setOnClickListener(view -> {
             selectedItem = item;
             updateFullVideo();
@@ -301,7 +304,6 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         @NonNull
         private String participantId;
         @Nullable
-        @SuppressWarnings("unused")
         private UserInfo userInfo;
         @Nullable
         private Stream stream;

@@ -32,4 +32,5 @@ dependencies {
     implementation project(':src:sample:utils')
     implementation project(':src:sdk:conference')
     implementation 'com.alibaba:fastjson:1.2.62'
+    implementation 'com.github.bumptech.glide:glide:3.7.0'
 }

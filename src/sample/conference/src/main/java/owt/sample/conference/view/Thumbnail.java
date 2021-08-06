@@ -46,6 +46,6 @@ public class Thumbnail extends RelativeLayout {
 
     public void initEgl(EglBase.Context eglBaseContext) {
         participantView.initEgl(eglBaseContext);
-        participantView.setZOrderOnTop(true);
+        participantView.setOnTop(true);
     }
 }
