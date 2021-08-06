@@ -215,7 +215,9 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             return;
         }
         Item item = data.get(index);
-        item.userInfo = userInfo;
+        if (userInfo != null || item.userInfo == null) {
+            item.userInfo = userInfo;
+        }
         notifyItemIfExists(index);
         updateFullVideo();
     }

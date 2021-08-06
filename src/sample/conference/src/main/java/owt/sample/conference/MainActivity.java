@@ -287,9 +287,6 @@ public class MainActivity extends AppCompatActivity
                         selfInfo = createUserInfo();
                         selfInfo.setParticipantId(conferenceInfo.self().id);
                         userInfoMap.put(selfInfo.getParticipantId(), selfInfo);
-                        if (rendererAdapter != null) {
-                            rendererAdapter.add(selfInfo.getParticipantId(), selfInfo);
-                        }
                         sendSelfInfo(null);
                         for (RemoteStream remoteStream : conferenceInfo.getRemoteStreams()) {
                             remoteStreamIdList.add(remoteStream.id());
@@ -334,8 +331,9 @@ public class MainActivity extends AppCompatActivity
 
     private UserInfo createUserInfo() {
         UserInfo ret = new UserInfo();
-        ret.setAvatarUrl("http://api.btstu.cn/sjtx/api.php");
-        ret.setUsername(android.os.Build.MODEL + "-" + UUID.randomUUID().toString().substring(0, 4));
+        String rand = UUID.randomUUID().toString().substring(0, 4);
+        ret.setUsername(android.os.Build.MODEL + "-" + rand);
+        ret.setAvatarUrl("http://api.btstu.cn/sjtx/api.php#" + rand);
         return ret;
     }
 
@@ -697,8 +695,11 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onAdapter(RendererAdapter adapter) {
         this.rendererAdapter = adapter;
-        if (selfInfo != null) {
-            rendererAdapter.add(selfInfo.getParticipantId(), selfInfo);
+        rendererAdapter.add(selfInfo.getParticipantId(), selfInfo);
+        for (Participant participant : conferenceInfo.getParticipants()) {
+            if (!TextUtils.equals(participant.id, selfInfo.getParticipantId())) {
+                rendererAdapter.add(participant.id, null);
+            }
         }
     }
 
@@ -728,7 +729,11 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onParticipantJoined(Participant participant) {
+        Log.d(TAG, "onParticipantJoined() called with: participant = [" + participant.id + "]");
         sendSelfInfo(participant.id);
+        runOnUiThread(() -> {
+            rendererAdapter.add(participant.id, null);
+        });
         participant.addObserver(new Participant.ParticipantObserver() {
             @Override
             public void onLeft() {

@@ -2,6 +2,7 @@ package owt.sample.conference.view;
 
 import android.content.Context;
 import android.os.Build;
+import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
@@ -31,6 +32,7 @@ public class ParticipantView extends RelativeLayout {
     private UserInfo userInfo;
     private ImageView ivAvatar;
     private boolean onTop;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     public ParticipantView(Context context) {
         super(context);
@@ -110,13 +112,13 @@ public class ParticipantView extends RelativeLayout {
     }
 
     private boolean notUiThread() {
-        return Looper.myLooper() != Looper.getMainLooper();
+        return Looper.myLooper() != uiHandler.getLooper();
     }
 
     private void updateAvatar() {
         Log.d(TAG, "updateAvatar() called: stream is null " + (stream == null));
         if (notUiThread()) {
-            getHandler().post(this::updateAvatar);
+            uiHandler.post(this::updateAvatar);
             return;
         }
         if (stream != null) {
