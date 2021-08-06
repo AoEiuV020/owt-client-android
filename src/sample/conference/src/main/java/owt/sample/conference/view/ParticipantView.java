@@ -6,7 +6,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
-import android.support.annotation.UiThread;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -115,10 +114,18 @@ public class ParticipantView extends RelativeLayout {
         return Looper.myLooper() != uiHandler.getLooper();
     }
 
+    public final void runOnUiThread(Runnable action) {
+        if (notUiThread()) {
+            uiHandler.post(action);
+        } else {
+            action.run();
+        }
+    }
+
     private void updateAvatar() {
         Log.d(TAG, "updateAvatar() called: stream is null " + (stream == null));
         if (notUiThread()) {
-            uiHandler.post(this::updateAvatar);
+            runOnUiThread(this::updateAvatar);
             return;
         }
         if (stream != null) {
@@ -141,16 +148,22 @@ public class ParticipantView extends RelativeLayout {
         updateAvatar();
     }
 
-    @UiThread
     public void setUserInfo(@Nullable UserInfo userInfo) {
         if (this.userInfo == userInfo) {
             return;
         }
         this.userInfo = userInfo;
-        if (userInfo == null || TextUtils.isEmpty(userInfo.getAvatarUrl())) {
-            ivAvatar.setImageResource(R.drawable.default_avatar);
-            return;
-        }
-        Glide.with(getContext()).load(userInfo.getAvatarUrl()).into(ivAvatar);
+        runOnUiThread(() -> {
+            if (userInfo == null || TextUtils.isEmpty(userInfo.getAvatarUrl())) {
+                ivAvatar.setImageResource(R.drawable.default_avatar);
+                return;
+            }
+            Log.d(TAG, "load avatar: url = [" + userInfo.getAvatarUrl() + "]");
+            Glide.with(getContext()).load(userInfo.getAvatarUrl()).into(ivAvatar);
+        });
+    }
+
+    public Stream getStream() {
+        return stream;
     }
 }

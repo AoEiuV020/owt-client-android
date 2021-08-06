@@ -258,20 +258,28 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         if (selectedItem != null) {
             Item item = selectedItem;
             int index = data.indexOf(item);
-            if (index != -1 && item.stream != null) {
-                _attackStream(item.stream, fullParticipantView);
+            if (index != -1) {
+                updateFullVideo(item);
                 return;
             }
         }
         for (int i = data.size() - 1; i >= 0; i--) {
             Item item = data.get(i);
             if (item.stream != null) {
-                _attackStream(item.stream, fullParticipantView);
+                updateFullVideo(item);
                 return;
             }
         }
-        Stream oldStream = (Stream) fullParticipantView.getTag(R.id.tag_stream);
-        _detachStream(oldStream, fullParticipantView);
+        if (!data.isEmpty()) {
+            updateFullVideo(data.get(0));
+            return;
+        }
+        _detachStream(fullParticipantView.getStream(), fullParticipantView);
+    }
+
+    private void updateFullVideo(Item item) {
+        fullParticipantView.setUserInfo(item.userInfo);
+        _attackStream(item.stream, fullParticipantView);
     }
 
     private void setVisibility(View view, int visibility) {
