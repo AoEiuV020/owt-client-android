@@ -25,6 +25,7 @@ import owt.base.LocalStream;
 import owt.base.RemoteStream;
 import owt.base.Stream;
 import owt.conference.Publication;
+import owt.conference.RemoteMixedStream;
 import owt.conference.Subscription;
 import owt.sample.conference.view.ParticipantView;
 import owt.sample.conference.view.Thumbnail;
@@ -110,6 +111,9 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     @WorkerThread
     public void attachRemoteStream(Subscription subscription, @NonNull RemoteStream stream) {
         Log.d(TAG, "attachRemoteStream() called with: subscription = [" + subscription.id + "], stream = [" + stream.id() + "]");
+        if (stream instanceof RemoteMixedStream) {
+            return;
+        }
         Item item = getOrCreateItem(stream.origin(), stream);
         if (item.stream instanceof LocalStream) {
             Log.d(TAG, "attachRemoteStream: ignore local user");
