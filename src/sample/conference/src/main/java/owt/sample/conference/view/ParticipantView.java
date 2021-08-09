@@ -32,6 +32,7 @@ public class ParticipantView extends RelativeLayout {
     private ImageView ivAvatar;
     private boolean onTop;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private boolean isFrontCamera;
 
     public ParticipantView(Context context) {
         super(context);
@@ -106,7 +107,7 @@ public class ParticipantView extends RelativeLayout {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        renderer.setMirror(stream instanceof LocalStream);
+        onSwitchCamera(isFrontCamera);
         updateAvatar();
     }
 
@@ -165,5 +166,10 @@ public class ParticipantView extends RelativeLayout {
 
     public Stream getStream() {
         return stream;
+    }
+
+    public void onSwitchCamera(boolean isFrontCamera) {
+        this.isFrontCamera = isFrontCamera;
+        renderer.setMirror(stream instanceof LocalStream && isFrontCamera);
     }
 }

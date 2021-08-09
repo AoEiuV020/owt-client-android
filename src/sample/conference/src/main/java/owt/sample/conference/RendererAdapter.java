@@ -39,6 +39,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
     @Nullable
     private Item selectedItem;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private boolean isFrontCamera;
 
     public RendererAdapter(EglBase.Context eglBaseContext, @NonNull ParticipantView fullParticipantView) {
         this.eglBaseContext = eglBaseContext;
@@ -312,6 +313,25 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
                 item.subscription.getStats(rtcStatsReportActionCallback);
             }
         }
+    }
+
+    public void onSwitchCamera(boolean isFrontCamera) {
+        this.isFrontCamera = isFrontCamera;
+        fullParticipantView.onSwitchCamera(isFrontCamera);
+        for (Item item : data) {
+            if (item.participantView != null) {
+                item.participantView.onSwitchCamera(isFrontCamera);
+            }
+        }
+    }
+
+    private Item getLocalItem() {
+        for (Item item : data) {
+            if (item.stream instanceof LocalStream) {
+                return item;
+            }
+        }
+        return null;
     }
 
     public static class Item {

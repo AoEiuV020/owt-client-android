@@ -42,6 +42,7 @@ import com.alibaba.fastjson.JSON;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.webrtc.CameraVideoCapturer;
 import org.webrtc.EglBase;
 import org.webrtc.RTCStatsReport;
 
@@ -215,6 +216,7 @@ public class MainActivity extends AppCompatActivity
                         });
 
                         publication = result;
+                        rendererAdapter.onSwitchCamera(isCameraFront);
                         rendererAdapter.attachLocalStream(selfInfo.getParticipantId(), result, localStream);
                         runOnUiThread(() -> {
                             rendererAdapter.update(selfInfo);
@@ -384,6 +386,21 @@ public class MainActivity extends AppCompatActivity
         middleBtn = findViewById(R.id.multi_func_btn_middle);
         middleBtn.setOnClickListener(shareScreen);
         middleBtn.setVisibility(View.GONE);
+
+        rightBtn.setOnLongClickListener(view -> {
+            capturer.switchCamera(new CameraVideoCapturer.CameraSwitchHandler() {
+                @Override
+                public void onCameraSwitchDone(boolean isFrontCamera) {
+                    rendererAdapter.onSwitchCamera(isFrontCamera);
+                }
+
+                @Override
+                public void onCameraSwitchError(String s) {
+
+                }
+            });
+            return true;
+        });
 
         AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
