@@ -5,7 +5,6 @@
 package owt.sample.conference;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-import static org.webrtc.PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
 import static owt.base.MediaCodecs.AudioCodec.OPUS;
 import static owt.base.MediaCodecs.AudioCodec.PCMU;
 import static owt.base.MediaCodecs.VideoCodec.H264;
@@ -46,6 +45,9 @@ import org.webrtc.CameraVideoCapturer;
 import org.webrtc.EglBase;
 import org.webrtc.RTCStatsReport;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -66,6 +68,7 @@ import owt.conference.ConferenceClientConfiguration;
 import owt.conference.ConferenceInfo;
 import owt.conference.Participant;
 import owt.conference.Publication;
+import owt.conference.PublicationSettings;
 import owt.conference.PublishOptions;
 import owt.conference.RemoteMixedStream;
 import owt.conference.RemoteStream;
@@ -73,6 +76,7 @@ import owt.conference.SubscribeOptions;
 import owt.conference.SubscribeOptions.AudioSubscriptionConstraints;
 import owt.conference.SubscribeOptions.VideoSubscriptionConstraints;
 import owt.conference.Subscription;
+import owt.conference.SubscriptionCapabilities;
 import owt.sample.utils.OwtScreenCapturer;
 import owt.sample.utils.OwtVideoCapturer;
 
@@ -108,7 +112,6 @@ public class MainActivity extends AppCompatActivity
     private ArrayList<String> remoteStreamIdList = new ArrayList<>();
     private HashMap<String, RemoteStream> remoteStreamMap = new HashMap<>();
     private HashMap<String, List<String>> videoCodecMap = new HashMap<>();
-    private HashMap<String, List<String>> simulcastStreamMap = new HashMap<>();
     private UserInfo selfInfo;
     private HashMap<String, UserInfo> userInfoMap = new HashMap<>();
 
@@ -216,7 +219,7 @@ public class MainActivity extends AppCompatActivity
                         });
 
                         publication = result;
-                        rendererAdapter.onSwitchCamera(isCameraFront);
+                        rendererAdapter.onSwitchCamera(true);
                         rendererAdapter.attachLocalStream(selfInfo.getParticipantId(), result, localStream);
                         runOnUiThread(() -> {
                             rendererAdapter.update(selfInfo);
@@ -254,7 +257,7 @@ public class MainActivity extends AppCompatActivity
                     }
                 };
 
-                conferenceClient.publish(localStream, options, callback);
+                conferenceClient.publish(localStream, setPublishOptions(), callback);
             });
         }
     };
@@ -517,53 +520,6 @@ public class MainActivity extends AppCompatActivity
                 getStats();
             }
         }, 0, STATS_INTERVAL_MS);
-        subscribeMixedStream();
-    }
-
-    private void subscribeMixedStream() {
-        executor.execute(() -> {
-            for (RemoteStream remoteStream : conferenceClient.info().getRemoteStreams()) {
-                if (remoteStream instanceof RemoteMixedStream
-                        && ((RemoteMixedStream) remoteStream).view.equals("common")) {
-                    stream2Sub = remoteStream;
-                    break;
-                }
-            }
-            final RemoteStream finalStream2bSub = stream2Sub;
-            VideoSubscriptionConstraints videoOption =
-                    VideoSubscriptionConstraints.builder()
-                            .setResolution(640, 480)
-                            .setFrameRate(24)
-                            .addCodec(new VideoCodecParameters(H264))
-                            .addCodec(new VideoCodecParameters(VP8))
-                            .build();
-
-            AudioSubscriptionConstraints audioOption =
-                    AudioSubscriptionConstraints.builder()
-                            .addCodec(new AudioCodecParameters(OPUS))
-                            .addCodec(new AudioCodecParameters(PCMU))
-                            .build();
-
-            SubscribeOptions options = SubscribeOptions.builder(true, true)
-                    .setAudioOption(audioOption)
-                    .setVideoOption(videoOption)
-                    .build();
-
-            conferenceClient.subscribe(stream2Sub, options,
-                    new ActionCallback<Subscription>() {
-                        @Override
-                        public void onSuccess(Subscription result) {
-                            MainActivity.this.subscription = result;
-                            finalStream2bSub.attach(remoteRenderer);
-                        }
-
-                        @Override
-                        public void onFailure(OwtError error) {
-                            Log.e(TAG, "Failed to subscribe "
-                                    + error.errorMessage);
-                        }
-                    });
-        });
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
@@ -604,7 +560,6 @@ public class MainActivity extends AppCompatActivity
         VideoEncodingParameters h264 = new VideoEncodingParameters(H264);
         VideoEncodingParameters vp8 = new VideoEncodingParameters(VP8);
         VideoEncodingParameters vp9 = new VideoEncodingParameters(VP9);
-        VideoEncodingParameters h265 = new VideoEncodingParameters(H265);
         if (settingsFragment != null && settingsFragment.VideoEncodingVP8) {
             options = PublishOptions.builder()
                     .addVideoParameter(vp8)
@@ -616,10 +571,6 @@ public class MainActivity extends AppCompatActivity
         } else if (settingsFragment != null && settingsFragment.VideoEncodingVP9) {
             options = PublishOptions.builder()
                     .addVideoParameter(vp9)
-                    .build();
-        } else if (settingsFragment != null && settingsFragment.VideoEncodingH265) {
-            options = PublishOptions.builder()
-                    .addVideoParameter(h265)
                     .build();
         } else {
             options = PublishOptions.builder()
@@ -685,9 +636,6 @@ public class MainActivity extends AppCompatActivity
             vcp = new VideoCodecParameters(VP9);
         } else if (videoCodec.equals("H265")) {
             vcp = new VideoCodecParameters(H265);
-        }
-        if (rid != null) {
-            videoOptionBuilder.setRid(rid);
         }
         VideoSubscriptionConstraints videoOption = videoOptionBuilder
                 .addCodec(vcp)
@@ -879,37 +827,21 @@ public class MainActivity extends AppCompatActivity
 
     public void getParameterByRemoteStream(RemoteStream remoteStream) {
         List<String> videoCodecList = new ArrayList<>();
-        List<String> ridList = new ArrayList<>();
         SubscriptionCapabilities.VideoSubscriptionCapabilities videoSubscriptionCapabilities
-                = remoteStream.extraSubscriptionCapability.videoSubscriptionCapabilities;
+                = remoteStream.subscriptionCapability.videoSubscriptionCapabilities;
         for (VideoCodecParameters videoCodec : videoSubscriptionCapabilities.videoCodecs) {
             videoCodecList.add(videoCodec.name.name());
             videoCodecMap.put(remoteStream.id(), videoCodecList);
         }
 
-        for (PublicationSettings.VideoPublicationSettings videoPublicationSetting :
-                remoteStream.publicationSettings.videoPublicationSettings) {
-            if (videoCodecMap.containsKey(remoteStream.id())) {
-                videoCodecMap.get(remoteStream.id()).add(videoPublicationSetting.codec.name.name());
-            } else {
-                videoCodecList.add(videoPublicationSetting.codec.name.name());
-                videoCodecMap.put(remoteStream.id(), videoCodecList);
-            }
-
-            if (videoPublicationSetting.rid != null) {
-                ridList.add(videoPublicationSetting.rid);
-            }
-        }
-
-        if (ridList.size() != 0) {
-            simulcastStreamMap.put(remoteStream.id(), ridList);
+        PublicationSettings.VideoPublicationSettings videoPublicationSetting =
+                remoteStream.publicationSettings.videoPublicationSettings;
+        if (videoCodecMap.containsKey(remoteStream.id())) {
+            videoCodecMap.get(remoteStream.id()).add(videoPublicationSetting.codec.name.name());
+        } else {
+            videoCodecList.add(videoPublicationSetting.codec.name.name());
+            videoCodecMap.put(remoteStream.id(), videoCodecList);
         }
     }
 
-    public void removeDuplicate(List<String> list) {
-        LinkedHashSet<String> set = new LinkedHashSet<String>(list.size());
-        set.addAll(list);
-        list.clear();
-        list.addAll(set);
-    }
 }
