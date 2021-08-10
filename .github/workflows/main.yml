@@ -1,0 +1,138 @@
+name: Android CI
+env:
+    TZ: Asia/Shanghai
+
+on:
+  push:
+    tags:
+      - '*'
+    branches:
+      - '*'
+    paths-ignore:
+      - '.github/workflows/*'
+      - '!.github/workflows/main.yml'
+  pull_request:
+    paths-ignore:
+      - '.github/workflows/*'
+      - '!.github/workflows/main.yml'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: init custom env
+      run: |
+          BUILD_NAME="${GITHUB_REPOSITORY#*/}"
+          if [[ ${GITHUB_REF} == refs/tags* ]]
+          then
+              echo CREATE_RELEASE="true" >> .custom_env
+              BUILD_VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ ${GITHUB_REF} == refs/pull* ]]
+          then
+              num=${GITHUB_REF#refs/pull/}
+              num=${num%/merge}
+              BUILD_VERSION=pr-${num}-"$(date +'%Y%m%d%H%M%S')"
+          else
+              echo CREATE_RELEASE="true" >> .custom_env
+              echo PRE_RELEASE="true" >> .custom_env
+              BUILD_VERSION="$(date +'%Y%m%d%H%M%S')"
+          fi
+          BUILD_NAME_WITH_VERSION="$BUILD_NAME-$BUILD_VERSION"
+          echo BUILD_NAME="$BUILD_NAME" >> .custom_env
+          echo BUILD_VERSION="$BUILD_VERSION" >> .custom_env
+          echo BUILD_NAME_WITH_VERSION="$BUILD_NAME_WITH_VERSION" >> .custom_env
+          if test -n "${{ secrets.SIGNING_PROPERTIES }}"
+          then
+              echo "${{ secrets.SIGNING_PROPERTIES }}" > signing.properties
+              if test -n "${{ secrets.SIGNING_KEY }}"
+              then
+                  echo ANDROID_SIGN="true" >> .custom_env
+              fi
+              cat signing.properties >> .custom_env
+          fi
+          cat .custom_env
+          cat .custom_env >> $GITHUB_ENV
+    - uses: actions/checkout@v2
+    - name: set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Build with Gradle
+      run: ./gradlew assembleRelease
+    - uses: AoEiuV020/sign-android-release@v2
+      name: Sign conference APK
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      if: ${{ env.ANDROID_SIGN == 'true' }}
+      with:
+        releaseDirectory: src/sample/conference/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ env.keyAlias }}
+        keyStorePassword: ${{ env.storePassword }}
+        keyPassword: ${{ env.keyPassword }}
+    - uses: AoEiuV020/sign-android-release@v2
+      name: Sign p2p APK
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      if: ${{ env.ANDROID_SIGN == 'true' }}
+      with:
+        releaseDirectory: src/sample/p2p/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ env.keyAlias }}
+        keyStorePassword: ${{ env.storePassword }}
+        keyPassword: ${{ env.keyPassword }}
+    - name: pick release file
+      run: |
+        mv ./src/sample/conference/build/outputs/apk/release/*.apk conference-$BUILD_NAME_WITH_VERSION.apk
+        mv ./src/sample/p2p/build/outputs/apk/release/*.apk p2p-$BUILD_NAME_WITH_VERSION.apk
+    - name: Upload APK conference
+      uses: actions/upload-artifact@master
+      with:
+        name: conference-build
+        path: conference-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+    - name: Upload APK p2p
+      uses: actions/upload-artifact@master
+      with:
+        name: p2p-build
+        path: p2p-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+    - name: create release
+      if: ${{ env.CREATE_RELEASE == 'true' }}
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.BUILD_VERSION }}
+        release_name: ${{ env.BUILD_VERSION }}
+        body: ${{ github.event.commits[0].message }}
+        draft: true
+        prerelease: ${{ env.PRE_RELEASE == 'true' }}
+    - name: Upload Release Asset conference
+      if: ${{ env.CREATE_RELEASE == 'true' }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: conference-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+        asset_name: conference-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+        asset_content_type: application/zip
+    - name: Upload Release Asset p2p
+      if: ${{ env.CREATE_RELEASE == 'true' }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: p2p-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+        asset_name: p2p-${{ env.BUILD_NAME_WITH_VERSION }}.apk
+        asset_content_type: application/zip
+    - name: public release
+      if: ${{ env.CREATE_RELEASE == 'true' }}
+      uses: eregon/publish-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        release_id: ${{ steps.create_release.outputs.id }}
