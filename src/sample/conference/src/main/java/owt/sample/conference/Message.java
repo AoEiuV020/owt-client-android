@@ -6,26 +6,22 @@ import com.alibaba.fastjson.TypeReference;
 import java.lang.reflect.Type;
 
 @SuppressWarnings("unused")
-public class Message<T> {
+public class Message {
     public static final int TYPE_USER_INFO = 100;
+    public static final int TYPE_P2P_SIGNALING = 101;
     private int type;
-    private T data;
+    private String data;
 
     public Message() {
     }
 
-    public Message(int type, T data) {
+    public Message(int type, String data) {
         this.type = type;
         this.data = data;
     }
 
-    public static <T> Message<T> fromJson(String json, Class<T> type) {
-        return fromJson(json, (Type) type);
-    }
-
-    public static <T> Message<T> fromJson(String json, Type type) {
-        return JSON.parseObject(json, new TypeReference<Message<T>>(type) {
-        });
+    public static  Message fromJson(String json) {
+        return JSON.parseObject(json, Message.class);
     }
 
     @Override
@@ -40,11 +36,15 @@ public class Message<T> {
         return JSON.toJSONString(this);
     }
 
-    public T getData() {
+    public String getData() {
         return data;
     }
 
-    public void setData(T data) {
+    public <T> T getDataBean(Class<T> type) {
+        return JSON.parseObject(data, type);
+    }
+
+    public void setData(String data) {
         this.data = data;
     }
 

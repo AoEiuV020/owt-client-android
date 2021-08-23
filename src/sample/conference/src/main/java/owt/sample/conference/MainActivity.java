@@ -78,6 +78,10 @@ import owt.conference.SubscribeOptions.AudioSubscriptionConstraints;
 import owt.conference.SubscribeOptions.VideoSubscriptionConstraints;
 import owt.conference.Subscription;
 import owt.conference.SubscriptionCapabilities;
+import owt.sample.conference.p2p.P2PClient;
+import owt.sample.conference.p2p.P2PHelper;
+import owt.sample.conference.p2p.P2PRemoteStream;
+import owt.sample.conference.p2p.P2PSocket;
 import owt.sample.utils.OwtScreenCapturer;
 import owt.sample.utils.OwtVideoCapturer;
 
@@ -116,6 +120,8 @@ public class MainActivity extends AppCompatActivity
     private HashMap<String, List<String>> simulcastStreamMap = new HashMap<>();
     private UserInfo selfInfo;
     private HashMap<String, UserInfo> userInfoMap = new HashMap<>();
+    private P2PHelper p2PHelper = new P2PHelper();
+    private P2PSocket p2PSocket;
 
     private View.OnClickListener screenControl = new View.OnClickListener() {
         @Override
@@ -213,6 +219,7 @@ public class MainActivity extends AppCompatActivity
                 localStream = new LocalStream(capturer,
                         new MediaConstraints.AudioTrackConstraints());
 
+                p2PHelper.publish(localStream);
                 ActionCallback<Publication> callback = new ActionCallback<Publication>() {
                     @Override
                     public void onSuccess(final Publication result) {
@@ -296,6 +303,7 @@ public class MainActivity extends AppCompatActivity
                     @Override
                     public void onSuccess(ConferenceInfo conferenceInfo) {
                         MainActivity.this.conferenceInfo = conferenceInfo;
+                        p2PHelper.onJoinSuccess(conferenceInfo, p2PSocket);
                         selfInfo = createUserInfo();
                         selfInfo.setParticipantId(conferenceInfo.self().id);
                         userInfoMap.put(selfInfo.getParticipantId(), selfInfo);
@@ -322,7 +330,7 @@ public class MainActivity extends AppCompatActivity
                         }
                         requestPermission();
                         runOnUiThread(() -> {
-                            rightBtn.performClick();
+//                            rightBtn.performClick();
                         });
                     }
 
@@ -484,6 +492,29 @@ public class MainActivity extends AppCompatActivity
                 .build();
         conferenceClient = new ConferenceClient(configuration);
         conferenceClient.addObserver(this);
+        p2PSocket = new P2PSocket(conferenceClient);
+        p2PHelper.initClient(new P2PClient.P2PClientObserver() {
+            @Override
+            public void onStreamAdded(P2PRemoteStream remoteStream) {
+                rendererAdapter.attachP2PStream(remoteStream);
+                remoteStream.addObserver(new owt.base.RemoteStream.StreamObserver() {
+                    @Override
+                    public void onEnded() {
+                         rendererAdapter.detachP2PStream(remoteStream);
+                    }
+
+                    @Override
+                    public void onUpdated() {
+
+                    }
+                });
+            }
+
+            @Override
+            public void onDataReceived(String peerId, String message) {
+
+            }
+        });
     }
 
     private void requestPermission() {
@@ -545,6 +576,7 @@ public class MainActivity extends AppCompatActivity
                 getStats();
             }
         }, 0, STATS_INTERVAL_MS);
+        p2PHelper.onConnected();
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
@@ -669,6 +701,9 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void subscribeForward(RemoteStream remoteStream, String videoCodec, String rid) {
+        if (p2PHelper.isEnabled()) {
+            return;
+        }
         VideoSubscriptionConstraints.Builder videoOptionBuilder =
                 VideoSubscriptionConstraints.builder();
 
@@ -754,6 +789,7 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onParticipantJoined(Participant participant) {
         Log.d(TAG, "onParticipantJoined() called with: participant = [" + participant.id + "]");
+        p2PHelper.onParticipantJoined(participant);
         sendSelfInfo(participant.id);
         runOnUiThread(() -> {
             rendererAdapter.add(participant.id, null);
@@ -772,7 +808,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void sendSelfInfo(String to) {
-        Message<UserInfo> message = new Message<>(Message.TYPE_USER_INFO, selfInfo);
+        Message message = new Message(Message.TYPE_USER_INFO, JSON.toJSONString(selfInfo));
         conferenceClient.send(to, JSON.toJSONString(message), new ActionCallback<Void>() {
             @Override
             public void onSuccess(Void result) {
@@ -789,9 +825,9 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onMessageReceived(String message, String from, String to) {
         Log.d(TAG, "onMessageReceived() called with: message = [" + message + "], from = [" + from + "], to = [" + to + "]");
-        Message<UserInfo> messageBean = Message.fromJson(message, UserInfo.class);
+        Message messageBean = Message.fromJson(message);
         if (messageBean.getType() == Message.TYPE_USER_INFO) {
-            UserInfo userInfo = messageBean.getData();
+            UserInfo userInfo = messageBean.getDataBean(UserInfo.class);
             boolean exists = userInfoMap.containsKey(userInfo.getParticipantId());
             userInfoMap.put(userInfo.getParticipantId(), userInfo);
             runOnUiThread(() -> {
@@ -835,6 +871,7 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onServerDisconnected() {
+        p2PHelper.onServerDisconnected();
         runOnUiThread(() -> {
             switchFragment(loginFragment);
             leftBtn.setEnabled(true);

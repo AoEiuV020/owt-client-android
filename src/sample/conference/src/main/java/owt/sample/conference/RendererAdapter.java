@@ -111,7 +111,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
 
     @WorkerThread
     public void attachRemoteStream(Subscription subscription, @NonNull RemoteStream stream) {
-        Log.d(TAG, "attachRemoteStream() called with: subscription = [" + subscription.id + "], stream = [" + stream.id() + "]");
+        Log.d(TAG, "attachRemoteStream() called with: origin = [" + stream.origin() + "], stream = [" + stream.id() + "]");
         if (stream instanceof RemoteMixedStream) {
             return;
         }
@@ -123,6 +123,23 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
         item.stream = stream;
         item.participantId = stream.origin();
         item.subscription = subscription;
+        _attackStream(item.stream, item.participantView);
+        updateFullVideo();
+    }
+
+    @WorkerThread
+    public void attachP2PStream(@NonNull RemoteStream stream) {
+        Log.d(TAG, "attachP2PStream() called with: origin = [" + stream.origin() + "], stream = [" + stream.id() + "]");
+        if (stream instanceof RemoteMixedStream) {
+            return;
+        }
+        Item item = getOrCreateItem(stream.origin(), stream);
+        if (item.stream instanceof LocalStream) {
+            Log.d(TAG, "attachRemoteStream: ignore local user");
+            return;
+        }
+        item.stream = stream;
+        item.participantId = stream.origin();
         _attackStream(item.stream, item.participantView);
         updateFullVideo();
     }
@@ -142,7 +159,7 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
 
     @WorkerThread
     public void detachRemoteStream(RemoteStream stream) {
-        Log.d(TAG, "detachRemoteStream() called with: stream = [" + stream.id() + "]");
+        Log.d(TAG, "detachRemoteStream() called with: origin = [" + stream.origin() + "], stream = [" + stream.id() + "]");
         Item item = getOrCreateItem(stream.origin(), stream);
         _detachStream(item.stream, item.participantView);
         item.stream = null;
@@ -150,6 +167,15 @@ public class RendererAdapter extends RecyclerView.Adapter<RendererAdapter.ViewHo
             item.subscription.stop();
             item.subscription = null;
         }
+        updateFullVideo();
+    }
+
+    @WorkerThread
+    public void detachP2PStream(RemoteStream stream) {
+        Log.d(TAG, "detachP2PStream() called with: origin = [" + stream.origin() + "], stream = [" + stream.id() + "]");
+        Item item = getOrCreateItem(stream.origin(), stream);
+        _detachStream(item.stream, item.participantView);
+        item.stream = null;
         updateFullVideo();
     }
 
